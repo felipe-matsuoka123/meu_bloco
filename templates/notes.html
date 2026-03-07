@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Anotacoes | Meu Bloco{% endblock %}
+
+{% block content %}
+<section class="card notes-card">
+    <header class="notes-header">
+        <div>
+            <p class="eyebrow">Painel</p>
+            <h1>Suas anotações</h1>
+            <p class="muted">Conectado como {{ session["username"] }}</p>
+        </div>
+
+        <div class="header-actions">
+            <form method="post" action="{{ url_for('logout') }}">
+                <button type="submit" class="secondary-button">Sair</button>
+            </form>
+        </div>
+    </header>
+
+    <section class="workspace-grid">
+        <section class="workspace-main">
+            <form method="post" class="stack composer-card">
+                <input type="hidden" name="form_name" value="note">
+                <label class="field">
+                    <span>Nova anotação</span>
+                    <textarea name="content" rows="6" placeholder="Escreva sua evolução clínica aqui ..." required></textarea>
+                </label>
+                <button type="submit">Salvar anotação</button>
+            </form>
+
+            <section class="notes-list">
+                {% if notes %}
+                    {% for note in notes %}
+                        <article class="note-item">
+                            <div class="note-meta">
+                                <span>Anotação #{{ note["id"] }}</span>
+                                <span>{{ note["created_at"] }}</span>
+                            </div>
+                            <p>{{ note["content"] }}</p>
+                            <div class="note-actions">
+                                <a href="{{ url_for('download_note_pdf', note_id=note['id']) }}" class="ghost-link">Baixar PDF</a>
+                                <form method="post" action="{{ url_for('delete_note', note_id=note['id']) }}">
+                                    <button type="submit" class="danger-button">Excluir</button>
+                                </form>
+                            </div>
+                        </article>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state">Nenhuma anotação ainda. Crie a primeira usando o campo acima.</div>
+                {% endif %}
+            </section>
+        </section>
+
+        <aside class="copilot-sidebar">
+            <section class="assistant-card">
+                <form method="post" class="stack review-form" data-loading-form>
+                    <input type="hidden" name="form_name" value="review">
+                    <section class="context-panel">
+                        <div class="context-header">
+                            <div>
+                                <p class="eyebrow">Contexto</p>
+                                <h3>Selecionadas</h3>
+                            </div>
+                            <span class="context-counter">{% if selected_note_id %}1 selecionada{% else %}0 selecionadas{% endif %}</span>
+                        </div>
+
+                        <div class="context-list">
+                            {% for note in notes %}
+                                <label class="context-item">
+                                    <input
+                                        type="radio"
+                                        name="selected_note_id"
+                                        value="{{ note['id'] }}"
+                                        {% if note['id'] == selected_note_id %}checked{% endif %}
+                                    >
+                                    <span>
+                                        <strong>Anotação #{{ note["id"] }}</strong>
+                                        <small>{{ review_counts[note["id"]] }}/4 hoje</small>
+                                    </span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </section>
+
+                    <div class="assistant-actions">
+                        <button type="submit" class="loading-button" data-loading-button>
+                            <span class="button-label">Revisar historico</span>
+                            <span class="button-loading" aria-hidden="true">
+                                <span class="spinner"></span>
+                                Gerando analise...
+                            </span>
+                        </button>
+                    </div>
+                    <p class="review-help muted">Usando IA, gere uma revisão curta com os principais pontos pouco claros, faltantes ou em aberto.</p>
+                </form>
+
+                {% if review_output %}
+                    <section class="review-panel">
+                        <p class="eyebrow">Analise</p>
+                        <div class="review-output">{{ review_output }}</div>
+                    </section>
+                    <form method="post" class="inline-form">
+                        <input type="hidden" name="form_name" value="clear_review">
+                        <button type="submit" class="ghost-button">Limpar analise</button>
+                    </form>
+                {% endif %}
+            </section>
+        </aside>
+    </section>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.querySelector("[data-loading-form]");
+    if (!form) return;
+
+    form.addEventListener("submit", function () {
+        const button = form.querySelector("[data-loading-button]");
+        if (!button) return;
+        button.disabled = true;
+        button.classList.add("is-loading");
+    });
+});
+</script>
+{% endblock %}

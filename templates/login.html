@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Entrar | Meu Bloco{% endblock %}
+
+{% block content %}
+<section class="auth-layout">
+    <article class="card auth-panel auth-panel-brand">
+        <p class="eyebrow">Meu Bloco</p>
+        <h1>Um lugar simples para guardar o que importa.</h1>
+        <p class="muted lead">
+            Anote, organize e retome suas informacoes com clareza.
+            Sem excesso. Sem distrações.
+        </p>
+    </article>
+
+    <section class="card auth-panel auth-panel-form">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Acesso</p>
+                <h2>Entrar</h2>
+            </div>
+        </div>
+
+        <form method="post" class="stack">
+            <label class="field">
+                <span>Nome de usuario</span>
+                <input type="text" name="username" autocomplete="username" placeholder="Seu usuário" required>
+            </label>
+
+            <label class="field">
+                <span>Senha</span>
+                <input type="password" name="password" autocomplete="current-password" placeholder="Digite sua senha" required>
+            </label>
+
+            <button type="submit">Entrar</button>
+        </form>
+
+        <p class="muted auth-link">Ainda nao tem conta? <a href="{{ url_for('register') }}">Criar usuario</a></p>
+    </section>
+</section>
+{% endblock %}

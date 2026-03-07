@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Criar Conta | Meu Bloco{% endblock %}
+
+{% block content %}
+<section class="auth-layout">
+    <article class="card auth-panel auth-panel-brand">
+        <p class="eyebrow">Novo acesso</p>
+        <h1>Comece com um espaco seu.</h1>
+        <p class="muted lead">
+            Crie sua conta e mantenha suas anotacoes sempre por perto,
+            em um ambiente limpo e focado.
+        </p>
+    </article>
+
+    <section class="card auth-panel auth-panel-form">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Cadastro</p>
+                <h2>Criar conta</h2>
+            </div>
+            <span class="status-pill">Novo usuario</span>
+        </div>
+
+        <form method="post" class="stack">
+            <label class="field">
+                <span>Nome de usuario</span>
+                <input type="text" name="username" autocomplete="username" minlength="3" placeholder="ex: felipe" required>
+            </label>
+
+            <label class="field">
+                <span>Senha</span>
+                <input type="password" name="password" autocomplete="new-password" minlength="8" placeholder="Minimo de 8 caracteres" required>
+            </label>
+
+            <label class="field">
+                <span>Confirmar senha</span>
+                <input type="password" name="confirm_password" autocomplete="new-password" minlength="8" placeholder="Repita a senha" required>
+            </label>
+
+            <button type="submit">Criar usuario</button>
+        </form>
+
+        <p class="muted auth-link">Ja tem conta? <a href="{{ url_for('login') }}">Entrar</a></p>
+    </section>
+</section>
+{% endblock %}
