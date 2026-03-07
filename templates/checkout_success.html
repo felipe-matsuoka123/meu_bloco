@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Pagamento Concluido | Meu Bloco{% endblock %}
+
+{% block content %}
+<section class="auth-layout auth-layout-single">
+    <section class="card auth-panel auth-panel-form success-panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Stripe</p>
+                <h2>Pagamento concluido</h2>
+            </div>
+            <span class="status-pill">Confirmado</span>
+        </div>
+
+        <p class="muted">
+            Seu checkout foi concluido e a conta foi criada com sucesso.
+        </p>
+
+        {% if checkout_session %}
+        <div class="pricing-card">
+            <p class="pricing-label">Sessao</p>
+            <p class="pricing-amount">{{ checkout_session.id }}</p>
+            <p class="muted">Status: {{ checkout_session.payment_status }}</p>
+            {% if created_username %}
+            <p class="muted">Usuario criado: {{ created_username }}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <a class="secondary-link" href="{{ url_for('login') }}">Ir para entrar</a>
+    </section>
+</section>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Pagamento Cancelado | Meu Bloco{% endblock %}
+
+{% block content %}
+<section class="auth-layout auth-layout-single">
+    <section class="card auth-panel auth-panel-form success-panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Stripe</p>
+                <h2>Pagamento cancelado</h2>
+            </div>
+            <span class="status-pill">Sem cobranca</span>
+        </div>
+
+        <p class="muted">
+            Nenhuma cobranca foi concluida. Seu cadastro ainda nao foi criado.
+            Voce pode voltar ao plano e tentar novamente.
+        </p>
+
+        <div class="inline-actions">
+            <a class="secondary-link" href="{{ url_for('pricing') }}">Tentar novamente</a>
+            <a class="secondary-link" href="{{ url_for('register') }}">Editar cadastro</a>
+        </div>
+    </section>
+</section>
+{% endblock %}

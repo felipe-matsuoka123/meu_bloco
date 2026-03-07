@@ -5,7 +5,7 @@ A small Python notes app with:
 - a login page
 - a registration page
 - SQLite note storage
-- hashed passwords
+- bcrypt-hashed passwords
 - session-based authentication
 - an AI review tool for selected notes
 - explicit note selection for AI context
@@ -30,8 +30,11 @@ A small Python notes app with:
 3. Set a secret key:
 
    ```bash
-   export SECRET_KEY="replace-this-with-a-random-secret"
-   export GEMINI_API_KEY="your-google-gemini-api-key"
+    export SECRET_KEY="replace-this-with-a-random-secret"
+    export GEMINI_API_KEY="your-google-gemini-api-key"
+    export STRIPE_SECRET_KEY="sk_test_..."
+    export STRIPE_PRICE_LOOKUP_KEY="starter_plan"
+    export GIFT_CARD_OVERRIDE_CODE="TEST-GIFT"
    ```
 
    `SECRET_KEY` is just a long random private string used by Flask to protect sessions and login cookies.
@@ -84,6 +87,10 @@ This will:
 - Notes are stored in `notes.db`.
 - Create users in the `/register` page.
 - Passwords are stored hashed, not in plain text.
+- New passwords use `bcrypt`.
+- After 5 failed login attempts, the account is locked for 15 minutes.
+- The `/pricing` page starts a Stripe Checkout flow when `STRIPE_SECRET_KEY` and `STRIPE_PRICE_LOOKUP_KEY` are configured.
+- The registration form accepts an optional `GIFT_CARD_OVERRIDE_CODE` that bypasses billing for testing.
 - Notes belong to the logged-in user only.
 - The review tool lives in the notes sidebar and only uses the notes you select as context.
 - Each note can be exported locally as a PDF.

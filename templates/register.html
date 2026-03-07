@@ -25,7 +25,7 @@
         <form method="post" class="stack">
             <label class="field">
                 <span>Nome de usuario</span>
-                <input type="text" name="username" autocomplete="username" minlength="3" placeholder="ex: felipe" required>
+                <input type="text" name="username" autocomplete="username" minlength="3" placeholder="Usuario" required>
             </label>
 
             <label class="field">
@@ -36,6 +36,11 @@
             <label class="field">
                 <span>Confirmar senha</span>
                 <input type="password" name="confirm_password" autocomplete="new-password" minlength="8" placeholder="Repita a senha" required>
+            </label>
+
+            <label class="field">
+                <span>Codigo gift card</span>
+                <input type="text" name="gift_card_code" autocomplete="off" placeholder="Opcional para testes">
             </label>
 
             <button type="submit">Criar usuario</button>

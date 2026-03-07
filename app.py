@@ -3,15 +3,17 @@ import re
 import sqlite3
 import unicodedata
 from io import BytesIO
-from datetime import date
+from datetime import date, datetime, timedelta
 from functools import lru_cache, wraps
 from pathlib import Path
 
+import bcrypt
 from flask import Flask, flash, g, redirect, render_template, request, send_file, session, url_for
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
-from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.security import check_password_hash
+import stripe
 
 try:
     from google import genai
@@ -27,6 +29,13 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me-for-production")
 app.config["DATABASE"] = os.environ.get("DATABASE_PATH", DATABASE_PATH)
 app.config["GEMINI_MODEL"] = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+app.config["MAX_LOGIN_ATTEMPTS"] = 5
+app.config["LOGIN_LOCKOUT_MINUTES"] = 15
+app.config["STRIPE_SECRET_KEY"] = os.environ.get("STRIPE_SECRET_KEY", "")
+app.config["STRIPE_PRICE_LOOKUP_KEY"] = os.environ.get("STRIPE_PRICE_LOOKUP_KEY", "")
+app.config["GIFT_CARD_OVERRIDE_CODE"] = os.environ.get("GIFT_CARD_OVERRIDE_CODE", "")
+
+stripe.api_key = app.config["STRIPE_SECRET_KEY"]
 
 
 def get_db() -> sqlite3.Connection:
@@ -77,8 +86,19 @@ def init_db() -> None:
         )
         """
     )
+    migrate_users_table(db)
     migrate_notes_table(db)
     db.commit()
+
+
+def migrate_users_table(db: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()}
+    if "failed_login_attempts" not in columns:
+        db.execute(
+            "ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER NOT NULL DEFAULT 0"
+        )
+    if "locked_until" not in columns:
+        db.execute("ALTER TABLE users ADD COLUMN locked_until TEXT")
 
 
 def migrate_notes_table(db: sqlite3.Connection) -> None:
@@ -106,7 +126,7 @@ def migrate_notes_table(db: sqlite3.Connection) -> None:
     if legacy_user is None:
         cursor = db.execute(
             "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-            ("legacy", generate_password_hash(os.environ.get("LEGACY_PASSWORD", "change-this"))),
+            ("legacy", hash_password(os.environ.get("LEGACY_PASSWORD", "change-this"))),
         )
         legacy_user_id = cursor.lastrowid
     else:
@@ -144,6 +164,93 @@ def current_user_id() -> int:
     if user_id is None:
         raise KeyError("user_id")
     return int(user_id)
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def is_bcrypt_hash(password_hash: str) -> bool:
+    return password_hash.startswith("$2a$") or password_hash.startswith("$2b$") or password_hash.startswith("$2y$")
+
+
+def verify_password(password_hash: str, password: str) -> bool:
+    if is_bcrypt_hash(password_hash):
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    return check_password_hash(password_hash, password)
+
+
+def get_lockout_expiration() -> str:
+    return (datetime.utcnow() + timedelta(minutes=app.config["LOGIN_LOCKOUT_MINUTES"])).isoformat(timespec="seconds")
+
+
+def parse_lockout(locked_until: str | None) -> datetime | None:
+    if not locked_until:
+        return None
+    try:
+        return datetime.fromisoformat(locked_until)
+    except ValueError:
+        return None
+
+
+def reset_login_failures(db: sqlite3.Connection, user_id: int) -> None:
+    db.execute(
+        """
+        UPDATE users
+        SET failed_login_attempts = 0,
+            locked_until = NULL
+        WHERE id = ?
+        """,
+        (user_id,),
+    )
+
+
+def register_failed_login(db: sqlite3.Connection, user_id: int, failed_attempts: int) -> None:
+    locked_until = None
+    if failed_attempts >= app.config["MAX_LOGIN_ATTEMPTS"]:
+        locked_until = get_lockout_expiration()
+
+    db.execute(
+        """
+        UPDATE users
+        SET failed_login_attempts = ?,
+            locked_until = ?
+        WHERE id = ?
+        """,
+        (failed_attempts, locked_until, user_id),
+    )
+
+
+def stripe_checkout_ready() -> bool:
+    return bool(app.config["STRIPE_SECRET_KEY"] and app.config["STRIPE_PRICE_LOOKUP_KEY"])
+
+
+def absolute_url(endpoint: str, **values: str) -> str:
+    return url_for(endpoint, _external=True, **values)
+
+
+def get_pending_registration() -> dict[str, str] | None:
+    pending = session.get("pending_registration")
+    if not isinstance(pending, dict):
+        return None
+    username = pending.get("username")
+    password = pending.get("password")
+    if not isinstance(username, str) or not isinstance(password, str):
+        return None
+    return {"username": username, "password": password}
+
+
+def gift_card_override_matches(code: str) -> bool:
+    configured_code = app.config["GIFT_CARD_OVERRIDE_CODE"].strip()
+    return bool(configured_code and code.strip() == configured_code)
+
+
+def create_user_account(db: sqlite3.Connection, username: str, password: str) -> None:
+    db.execute(
+        "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+        (username, hash_password(password)),
+    )
+    db.commit()
 
 
 def get_user_notes(user_id: int) -> list[sqlite3.Row]:
@@ -406,15 +513,53 @@ def login():
         password = request.form.get("password", "")
         db = get_db()
         user = db.execute(
-            "SELECT id, username, password_hash FROM users WHERE username = ?",
+            """
+            SELECT id, username, password_hash, failed_login_attempts, locked_until
+            FROM users
+            WHERE username = ?
+            """,
             (username,),
         ).fetchone()
 
-        if user and check_password_hash(user["password_hash"], password):
-            session["logged_in"] = True
-            session["user_id"] = user["id"]
-            session["username"] = user["username"]
-            return redirect(url_for("notes"))
+        if user:
+            locked_until = parse_lockout(user["locked_until"])
+            now = datetime.utcnow()
+            if locked_until and locked_until > now:
+                flash(
+                    "Muitas tentativas invalidas. Tente novamente em 15 minutos.",
+                    "error",
+                )
+                return render_template("login.html")
+
+            if verify_password(user["password_hash"], password):
+                reset_login_failures(db, user["id"])
+                if not is_bcrypt_hash(user["password_hash"]):
+                    db.execute(
+                        "UPDATE users SET password_hash = ? WHERE id = ?",
+                        (hash_password(password), user["id"]),
+                    )
+                db.commit()
+                session["logged_in"] = True
+                session["user_id"] = user["id"]
+                session["username"] = user["username"]
+                return redirect(url_for("notes"))
+
+            failed_attempts = int(user["failed_login_attempts"]) + 1
+            register_failed_login(db, user["id"], failed_attempts)
+            db.commit()
+
+            remaining_attempts = app.config["MAX_LOGIN_ATTEMPTS"] - failed_attempts
+            if remaining_attempts > 0:
+                flash(
+                    f"Usuario ou senha invalidos. Restam {remaining_attempts} tentativa(s).",
+                    "error",
+                )
+            else:
+                flash(
+                    "Limite de 5 tentativas atingido. Tente novamente em 15 minutos.",
+                    "error",
+                )
+            return render_template("login.html")
 
         flash("Usuario ou senha invalidos.", "error")
 
@@ -427,6 +572,7 @@ def register():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
+        gift_card_code = request.form.get("gift_card_code", "").strip()
         db = get_db()
 
         if len(username) < 3:
@@ -442,16 +588,133 @@ def register():
             ).fetchone()
             if existing_user is not None:
                 flash("Esse nome de usuario ja esta em uso.", "error")
-            else:
-                db.execute(
-                    "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                    (username, generate_password_hash(password)),
-                )
-                db.commit()
-                flash("Conta criada com sucesso. Agora voce pode entrar.", "success")
+            elif gift_card_override_matches(gift_card_code):
+                create_user_account(db, username, password)
+                session.pop("pending_registration", None)
+                flash("Conta criada com codigo de teste. Agora voce pode entrar.", "success")
                 return redirect(url_for("login"))
+            else:
+                session["pending_registration"] = {
+                    "username": username,
+                    "password": password,
+                }
+                flash("Finalize o pagamento para concluir a criacao da conta.", "success")
+                return redirect(url_for("pricing"))
 
     return render_template("register.html")
+
+
+@app.route("/pricing", methods=["GET"])
+def pricing():
+    pending_registration = get_pending_registration()
+    if pending_registration is None:
+        flash("Preencha o cadastro antes de seguir para o pagamento.", "error")
+        return redirect(url_for("register"))
+    return render_template(
+        "pricing.html",
+        stripe_ready=stripe_checkout_ready(),
+        pending_registration=pending_registration,
+        stripe_lookup_key=app.config["STRIPE_PRICE_LOOKUP_KEY"],
+    )
+
+
+@app.route("/create-checkout-session", methods=["POST"])
+def create_checkout_session():
+    pending_registration = get_pending_registration()
+    if pending_registration is None:
+        flash("Preencha o cadastro antes de iniciar o checkout.", "error")
+        return redirect(url_for("register"))
+
+    lookup_key = request.form.get("lookup_key", "").strip()
+    if not stripe_checkout_ready():
+        flash("Configure STRIPE_SECRET_KEY e STRIPE_PRICE_LOOKUP_KEY para ativar pagamentos.", "error")
+        return redirect(url_for("pricing"))
+
+    if not lookup_key or lookup_key != app.config["STRIPE_PRICE_LOOKUP_KEY"]:
+        flash("O plano selecionado e invalido.", "error")
+        return redirect(url_for("pricing"))
+
+    try:
+        prices = stripe.Price.list(
+            lookup_keys=[lookup_key],
+            expand=["data.product"],
+            limit=1,
+        )
+        if not prices.data:
+            flash("Nenhum preco foi encontrado para esse plano na Stripe.", "error")
+            return redirect(url_for("pricing"))
+
+        price = prices.data[0]
+        checkout_session = stripe.checkout.Session.create(
+            mode="payment",
+            line_items=[
+                {
+                    "price": price.id,
+                    "quantity": 1,
+                }
+            ],
+            metadata={"pending_username": pending_registration["username"]},
+            success_url=absolute_url("checkout_success") + "?session_id={CHECKOUT_SESSION_ID}",
+            cancel_url=absolute_url("checkout_cancel"),
+            locale="pt-BR",
+        )
+    except Exception:
+        flash("Nao foi possivel iniciar o checkout com a Stripe.", "error")
+        return redirect(url_for("pricing"))
+
+    return redirect(checkout_session.url, code=303)
+
+
+@app.route("/checkout/success", methods=["GET"])
+def checkout_success():
+    session_id = request.args.get("session_id", "")
+    checkout_session = None
+    pending_registration = get_pending_registration()
+
+    if pending_registration is None:
+        flash("Nenhum cadastro pendente foi encontrado.", "error")
+        return redirect(url_for("register"))
+
+    if stripe_checkout_ready() and session_id:
+        try:
+            checkout_session = stripe.checkout.Session.retrieve(session_id)
+        except Exception:
+            checkout_session = None
+
+    if checkout_session is None or checkout_session.payment_status != "paid":
+        flash("O pagamento ainda nao foi confirmado.", "error")
+        return redirect(url_for("pricing"))
+
+    db = get_db()
+    existing_user = db.execute(
+        "SELECT id FROM users WHERE username = ?",
+        (pending_registration["username"],),
+    ).fetchone()
+    if existing_user is not None:
+        session.pop("pending_registration", None)
+        flash("Esse nome de usuario ja foi utilizado. Escolha outro para continuar.", "error")
+        return redirect(url_for("register"))
+
+    create_user_account(
+        db,
+        pending_registration["username"],
+        pending_registration["password"],
+    )
+    session.pop("pending_registration", None)
+
+    return render_template(
+        "checkout_success.html",
+        checkout_session=checkout_session,
+        created_username=pending_registration["username"],
+    )
+
+
+@app.route("/checkout/cancel", methods=["GET"])
+def checkout_cancel():
+    if get_pending_registration() is None:
+        flash("Nenhum cadastro pendente foi encontrado.", "error")
+        return redirect(url_for("register"))
+    return render_template("checkout_cancel.html")
 
 
 @app.route("/logout", methods=["POST"])

@@ -190,6 +190,106 @@ h3 {
     color: var(--accent-dark);
 }
 
+.auth-divider {
+    position: relative;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.auth-divider::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    border-top: 1px solid rgba(148, 163, 184, 0.28);
+    z-index: 0;
+}
+
+.auth-divider span {
+    position: relative;
+    z-index: 1;
+    background: var(--panel-strong);
+    padding: 0 0.85rem;
+}
+
+.secondary-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: fit-content;
+    min-height: 48px;
+    padding: 0.8rem 1.15rem;
+    border-radius: 999px;
+    border: 1px solid rgba(37, 99, 235, 0.16);
+    background: rgba(37, 99, 235, 0.08);
+    color: var(--accent-dark);
+    text-decoration: none;
+    font-weight: 700;
+}
+
+.pricing-card,
+.setup-note {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 20px;
+    background: #f8fbff;
+    padding: 1.15rem;
+}
+
+.pricing-label {
+    margin: 0 0 0.35rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+}
+
+.pricing-amount {
+    margin: 0 0 0.55rem;
+    font-size: 1.4rem;
+    font-weight: 800;
+}
+
+.stripe-product-card {
+    display: grid;
+    gap: 1rem;
+}
+
+.stripe-product {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.stripe-product .description h3,
+.stripe-product .description h5 {
+    margin: 0;
+}
+
+.stripe-product .description h5 {
+    margin-top: 0.2rem;
+    color: var(--muted);
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.auth-layout-single {
+    grid-template-columns: minmax(320px, 720px);
+    justify-content: center;
+}
+
+.success-panel {
+    min-height: auto;
+}
+
+.inline-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
 .stack {
     display: grid;
     gap: 1rem;
