@@ -11,6 +11,9 @@
             Anote, organize e retome suas informacoes com clareza.
             Sem excesso. Sem distrações.
         </p>
+        <div class="motion-sculpture" data-motion-sculpture aria-hidden="true">
+            <canvas class="motion-canvas" data-motion-canvas></canvas>
+        </div>
     </article>
 
     <section class="card auth-panel auth-panel-form">
@@ -38,4 +41,124 @@
         <p class="muted auth-link">Ainda nao tem conta? <a href="{{ url_for('register') }}">Criar usuario</a></p>
     </section>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const sculpture = document.querySelector("[data-motion-sculpture]");
+        const canvas = document.querySelector("[data-motion-canvas]");
+        if (!sculpture || !canvas || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            return;
+        }
+
+        const context = canvas.getContext("2d");
+        const dots = [];
+        const pointer = { x: 0, y: 0, active: false };
+        let width = 0;
+        let height = 0;
+        let animationFrame = 0;
+
+        const makeDots = () => {
+            dots.length = 0;
+            const count = Math.max(38, Math.floor((width * height) / 3600));
+            for (let index = 0; index < count; index += 1) {
+                const x = Math.random() * width;
+                const y = Math.random() * height;
+                dots.push({
+                    x,
+                    y,
+                    baseX: x,
+                    baseY: y,
+                    vx: 0,
+                    vy: 0,
+                    size: 1.2 + Math.random() * 2.2,
+                    hue: Math.random() > 0.5 ? "37, 99, 235" : "14, 165, 233",
+                });
+            }
+        };
+
+        const resize = () => {
+            const rect = sculpture.getBoundingClientRect();
+            width = Math.max(1, Math.floor(rect.width));
+            height = Math.max(1, Math.floor(rect.height));
+            canvas.width = width;
+            canvas.height = height;
+            makeDots();
+        };
+
+        const setPointer = (clientX, clientY) => {
+            const rect = sculpture.getBoundingClientRect();
+            pointer.x = clientX - rect.left;
+            pointer.y = clientY - rect.top;
+            pointer.active = true;
+        };
+
+        const render = () => {
+            context.clearRect(0, 0, width, height);
+
+            for (const dot of dots) {
+                const restoreX = (dot.baseX - dot.x) * 0.01;
+                const restoreY = (dot.baseY - dot.y) * 0.01;
+                dot.vx += restoreX;
+                dot.vy += restoreY;
+
+                if (pointer.active) {
+                    const dx = pointer.x - dot.x;
+                    const dy = pointer.y - dot.y;
+                    const distance = Math.hypot(dx, dy);
+                    const force = Math.min(0.11, 18 / Math.max(distance, 30));
+                    dot.vx += (dx / Math.max(distance, 1)) * force;
+                    dot.vy += (dy / Math.max(distance, 1)) * force;
+                }
+
+                dot.vx *= 0.92;
+                dot.vy *= 0.92;
+                dot.x += dot.vx;
+                dot.y += dot.vy;
+
+                context.beginPath();
+                context.fillStyle = `rgba(${dot.hue}, 0.78)`;
+                context.arc(dot.x, dot.y, dot.size, 0, Math.PI * 2);
+                context.fill();
+            }
+
+            for (let index = 0; index < dots.length; index += 1) {
+                const dot = dots[index];
+                for (let offset = index + 1; offset < dots.length; offset += 1) {
+                    const neighbor = dots[offset];
+                    const dx = neighbor.x - dot.x;
+                    const dy = neighbor.y - dot.y;
+                    const distance = Math.hypot(dx, dy);
+                    if (distance < 56) {
+                        context.beginPath();
+                        context.strokeStyle = `rgba(123, 145, 181, ${0.15 * (1 - distance / 56)})`;
+                        context.lineWidth = 1;
+                        context.moveTo(dot.x, dot.y);
+                        context.lineTo(neighbor.x, neighbor.y);
+                        context.stroke();
+                    }
+                }
+            }
+
+            animationFrame = window.requestAnimationFrame(render);
+        };
+
+        resize();
+        render();
+
+        sculpture.addEventListener("pointermove", (event) => {
+            setPointer(event.clientX, event.clientY);
+        });
+
+        sculpture.addEventListener("pointerleave", () => {
+            pointer.active = false;
+        });
+
+        window.addEventListener("resize", resize);
+        window.addEventListener("beforeunload", () => {
+            window.cancelAnimationFrame(animationFrame);
+        });
+    });
+</script>
 {% endblock %}

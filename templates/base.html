@@ -21,6 +21,45 @@
         {% endwith %}
         {% block content %}{% endblock %}
     </main>
+    <script>
+        function getPortugueseValidationMessage(field) {
+            const validity = field.validity;
+            if (validity.valueMissing) {
+                return "Preencha este campo.";
+            }
+            if (validity.tooShort) {
+                return `Use pelo menos ${field.minLength} caracteres.`;
+            }
+            if (validity.typeMismatch) {
+                return "Preencha este campo em um formato valido.";
+            }
+            if (validity.patternMismatch) {
+                return "Preencha este campo no formato esperado.";
+            }
+            if (validity.rangeUnderflow || validity.rangeOverflow) {
+                return "Escolha um valor valido.";
+            }
+            if (validity.stepMismatch) {
+                return "Escolha um valor permitido.";
+            }
+            return "";
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const fields = document.querySelectorAll("input, textarea, select");
+            fields.forEach((field) => {
+                field.addEventListener("invalid", () => {
+                    field.setCustomValidity(getPortugueseValidationMessage(field));
+                });
+                field.addEventListener("input", () => {
+                    field.setCustomValidity("");
+                });
+                field.addEventListener("change", () => {
+                    field.setCustomValidity("");
+                });
+            });
+        });
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>
