@@ -140,6 +140,14 @@ def set_selected_note_id(selected_id: int | None) -> None:
         session["assistant_selected_note_id"] = selected_id
 
 
+def get_editing_note_id(notes_list: list[dict]) -> int | None:
+    available_ids = {int(note["id"]) for note in notes_list}
+    editing_raw = request.args.get("edit", "").strip()
+    if editing_raw.isdigit() and int(editing_raw) in available_ids:
+        return int(editing_raw)
+    return None
+
+
 def today_key() -> date:
     return date.today()
 
@@ -533,6 +541,7 @@ def notes():
     notes_list = db.list_user_notes(current_user_id())
     note_map = get_note_map(notes_list)
     selected_note_id = get_selected_note_id(notes_list)
+    editing_note_id = get_editing_note_id(notes_list)
 
     if request.method == "POST":
         form_name = request.form.get("form_name")
@@ -589,11 +598,28 @@ def notes():
     return render_template(
         "notes.html",
         notes=notes_list,
+        editing_note_id=editing_note_id,
         model_name=app.config["GEMINI_MODEL"],
         selected_note_id=selected_note_id,
         review_counts=review_counts,
         review_output=review_output,
     )
+
+
+@app.route("/notes/<int:note_id>/edit", methods=["POST"])
+@login_required
+def edit_note(note_id: int):
+    content = request.form.get("content", "").strip()
+    if not content:
+        flash("A anotacao nao pode ficar vazia.", "error")
+        return redirect(url_for("notes", edit=note_id))
+
+    if not db.update_note(current_user_id(), note_id, content):
+        flash("Anotacao nao encontrada.", "error")
+        return redirect(url_for("notes"))
+
+    flash("Anotacao atualizada.", "success")
+    return redirect(url_for("notes"))
 
 
 @app.route("/notes/<int:note_id>/delete", methods=["POST"])

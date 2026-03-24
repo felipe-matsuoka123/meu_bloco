@@ -138,6 +138,19 @@ def create_note(user_id: int, content: str) -> None:
     get_db().commit()
 
 
+def update_note(user_id: int, note_id: int, content: str) -> bool:
+    cursor = execute(
+        """
+        UPDATE notes
+        SET content = %s
+        WHERE id = %s AND user_id = %s
+        """,
+        (content, note_id, user_id),
+    )
+    get_db().commit()
+    return cursor.rowcount > 0
+
+
 def delete_note(user_id: int, note_id: int) -> None:
     execute(
         "DELETE FROM notes WHERE id = %s AND user_id = %s",

@@ -642,6 +642,17 @@ button:hover {
     flex-wrap: wrap;
 }
 
+.note-edit-form {
+    margin-top: 0.2rem;
+}
+
+.note-content {
+    white-space: pre-wrap;
+    font-size: 1rem;
+    line-height: 1.65;
+    margin-bottom: 1rem;
+}
+
 .ghost-link {
     display: inline-flex;
     align-items: center;
@@ -671,13 +682,6 @@ button:hover {
     border-radius: 20px;
     padding: 1.1rem 1.2rem;
     box-shadow: var(--shadow-soft);
-}
-
-.note-item p {
-    white-space: pre-wrap;
-    font-size: 1rem;
-    line-height: 1.65;
-    margin-bottom: 1rem;
 }
 
 .note-meta {
