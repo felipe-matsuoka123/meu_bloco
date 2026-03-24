@@ -4,7 +4,7 @@ A small Python notes app with:
 
 - a login page
 - a registration page
-- SQLite note storage
+- PostgreSQL note storage
 - bcrypt-hashed passwords
 - session-based authentication
 - an AI review tool for selected notes
@@ -27,21 +27,24 @@ A small Python notes app with:
    pip install -r requirements.txt
    ```
 
-3. Set a secret key:
+3. Set your environment:
 
    ```bash
-    export SECRET_KEY="replace-this-with-a-random-secret"
-    export GEMINI_API_KEY="your-google-gemini-api-key"
-    export STRIPE_SECRET_KEY="sk_test_..."
-    export STRIPE_PRICE_LOOKUP_KEY="starter_plan"
-    export GIFT_CARD_OVERRIDE_CODE="TEST-GIFT"
+   export SECRET_KEY="replace-this-with-a-random-secret"
+   export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/meu_bloco"
+   export GEMINI_API_KEY="your-google-gemini-api-key"
+   export STRIPE_SECRET_KEY="sk_test_..."
+   export STRIPE_PRICE_LOOKUP_KEY="starter_plan"
+   export GIFT_CARD_OVERRIDE_CODE="TEST-GIFT"
    ```
 
-   `SECRET_KEY` is just a long random private string used by Flask to protect sessions and login cookies.
+   `SECRET_KEY` is a long random private string used by Flask to protect sessions and login cookies.
+   `DATABASE_URL` must point at an existing PostgreSQL database.
    Example:
 
    ```bash
    export SECRET_KEY="8f1c6c6e7f194d0c8f2dbd3e7a0a9c3142e6b1baf4f54b2b"
+   export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/meu_bloco"
    ```
 
 4. Start the app:
@@ -66,25 +69,39 @@ ngrok http 5000
 
 Use the HTTPS forwarding URL from `ngrok` to access the app remotely.
 
-## One-command startup
+## Project layout
 
-You can also edit the variables at the top of [start_app.sh](/home/felipe/projects/meu_bloco/start_app.sh) and run:
+- [app.py](/home/felipe/projects/meu_bloco/app.py): Flask routes and application logic
+- [db.py](/home/felipe/projects/meu_bloco/db.py): PostgreSQL connection and query helpers
+- [schema.sql](/home/felipe/projects/meu_bloco/schema.sql): Postgres schema
+- [Procfile](/home/felipe/projects/meu_bloco/Procfile): production start command for Railway
 
-```bash
-chmod +x start_app.sh
-./start_app.sh
-```
+## Railway
 
-This will:
+1. Add a PostgreSQL service in Railway.
+2. Deploy this repo as an app service in the same Railway project.
+3. Set these variables on the app service:
+   - `SECRET_KEY`
+   - `GEMINI_API_KEY`
+   - `STRIPE_SECRET_KEY`
+   - `STRIPE_PRICE_LOOKUP_KEY`
+   - `GIFT_CARD_OVERRIDE_CODE`
+4. Make sure `DATABASE_URL` is available to the app service from the PostgreSQL service.
+5. Railway can use [Procfile](/home/felipe/projects/meu_bloco/Procfile) or this explicit start command:
 
-- create `.venv` if needed
-- install requirements
-- export your keys
-- start the Flask app
+   ```bash
+   gunicorn app:app --bind 0.0.0.0:$PORT
+   ```
+
+6. Optional health check path:
+
+   ```text
+   /healthz
+   ```
 
 ## Notes
 
-- Notes are stored in `notes.db`.
+- Notes are stored in PostgreSQL.
 - Create users in the `/register` page.
 - Passwords are stored hashed, not in plain text.
 - New passwords use `bcrypt`.
@@ -95,5 +112,5 @@ This will:
 - The review tool lives in the notes sidebar and only uses the notes you select as context.
 - Each note can be exported locally as a PDF.
 - The default Gemini model is `gemini-2.5-flash-lite` and can be changed with `GEMINI_MODEL`.
-- If you already had an old `notes.db`, the app migrates old notes to a fallback `legacy` user.
+- PostgreSQL tables are created automatically on startup from [schema.sql](/home/felipe/projects/meu_bloco/schema.sql).
 - For any public exposure, set a strong `SECRET_KEY` first.

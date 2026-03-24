@@ -1,19 +1,21 @@
 import os
 import re
-import sqlite3
 import unicodedata
-from io import BytesIO
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache, wraps
+from io import BytesIO
 from pathlib import Path
 
 import bcrypt
-from flask import Flask, flash, g, redirect, render_template, request, send_file, session, url_for
+import stripe
+from flask import Flask, flash, redirect, render_template, request, send_file, session, url_for
+from dotenv import load_dotenv
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 from werkzeug.security import check_password_hash
-import stripe
+
+import db
 
 try:
     from google import genai
@@ -21,126 +23,30 @@ except ImportError:
     genai = None
 
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-DATABASE_PATH = os.path.join(BASE_DIR, "notes.db")
-NAMES_CSV_PATH = Path(BASE_DIR) / "all-pt-br-names.csv"
+BASE_DIR = Path(__file__).resolve().parent
+NAMES_CSV_PATH = BASE_DIR / "all-pt-br-names.csv"
+load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me-for-production")
-app.config["DATABASE"] = os.environ.get("DATABASE_PATH", DATABASE_PATH)
+app.config["DATABASE_URL"] = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://postgres:postgres@localhost:5432/meu_bloco",
+)
 app.config["GEMINI_MODEL"] = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
 app.config["MAX_LOGIN_ATTEMPTS"] = 5
 app.config["LOGIN_LOCKOUT_MINUTES"] = 15
 app.config["STRIPE_SECRET_KEY"] = os.environ.get("STRIPE_SECRET_KEY", "")
 app.config["STRIPE_PRICE_LOOKUP_KEY"] = os.environ.get("STRIPE_PRICE_LOOKUP_KEY", "")
-app.config["GIFT_CARD_OVERRIDE_CODE"] = os.environ.get("GIFT_CARD_OVERRIDE_CODE", "")
+app.config["GIFT_CARD_OVERRIDE_CODE"] = os.environ.get("GIFT_CARD_OVERRIDE_CODE", "felipe")
 
 stripe.api_key = app.config["STRIPE_SECRET_KEY"]
+app.teardown_appcontext(db.close_db)
 
 
-def get_db() -> sqlite3.Connection:
-    if "db" not in g:
-        g.db = sqlite3.connect(app.config["DATABASE"])
-        g.db.row_factory = sqlite3.Row
-    return g.db
-
-
-@app.teardown_appcontext
-def close_db(_exception: Exception | None) -> None:
-    db = g.pop("db", None)
-    if db is not None:
-        db.close()
-
-
-def init_db() -> None:
-    db = get_db()
-    db.execute(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    db.execute(
-        """
-        CREATE TABLE IF NOT EXISTS notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            content TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-        """
-    )
-    db.execute(
-        """
-        CREATE TABLE IF NOT EXISTS note_review_usage (
-            note_id INTEGER NOT NULL,
-            usage_date TEXT NOT NULL,
-            request_count INTEGER NOT NULL DEFAULT 0,
-            PRIMARY KEY (note_id, usage_date),
-            FOREIGN KEY (note_id) REFERENCES notes (id)
-        )
-        """
-    )
-    migrate_users_table(db)
-    migrate_notes_table(db)
-    db.commit()
-
-
-def migrate_users_table(db: sqlite3.Connection) -> None:
-    columns = {row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()}
-    if "failed_login_attempts" not in columns:
-        db.execute(
-            "ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER NOT NULL DEFAULT 0"
-        )
-    if "locked_until" not in columns:
-        db.execute("ALTER TABLE users ADD COLUMN locked_until TEXT")
-
-
-def migrate_notes_table(db: sqlite3.Connection) -> None:
-    columns = [row["name"] for row in db.execute("PRAGMA table_info(notes)").fetchall()]
-    if "user_id" in columns:
-        return
-
-    db.execute("ALTER TABLE notes RENAME TO notes_legacy")
-    db.execute(
-        """
-        CREATE TABLE notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            content TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-        """
-    )
-
-    legacy_user = db.execute(
-        "SELECT id FROM users WHERE username = ?",
-        ("legacy",),
-    ).fetchone()
-    if legacy_user is None:
-        cursor = db.execute(
-            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-            ("legacy", hash_password(os.environ.get("LEGACY_PASSWORD", "change-this"))),
-        )
-        legacy_user_id = cursor.lastrowid
-    else:
-        legacy_user_id = legacy_user["id"]
-
-    db.execute(
-        """
-        INSERT INTO notes (id, user_id, content, created_at)
-        SELECT id, ?, content, created_at
-        FROM notes_legacy
-        """,
-        (legacy_user_id,),
-    )
-    db.execute("DROP TABLE notes_legacy")
+def ensure_database() -> None:
+    with app.app_context():
+        db.init_db()
 
 
 def login_required(view):
@@ -152,11 +58,6 @@ def login_required(view):
         return view(**kwargs)
 
     return wrapped_view
-
-
-@app.before_request
-def ensure_database() -> None:
-    init_db()
 
 
 def current_user_id() -> int:
@@ -171,7 +72,7 @@ def hash_password(password: str) -> str:
 
 
 def is_bcrypt_hash(password_hash: str) -> bool:
-    return password_hash.startswith("$2a$") or password_hash.startswith("$2b$") or password_hash.startswith("$2y$")
+    return password_hash.startswith(("$2a$", "$2b$", "$2y$"))
 
 
 def verify_password(password_hash: str, password: str) -> bool:
@@ -180,45 +81,16 @@ def verify_password(password_hash: str, password: str) -> bool:
     return check_password_hash(password_hash, password)
 
 
-def get_lockout_expiration() -> str:
-    return (datetime.utcnow() + timedelta(minutes=app.config["LOGIN_LOCKOUT_MINUTES"])).isoformat(timespec="seconds")
+def lockout_expiration() -> datetime:
+    return datetime.now(timezone.utc) + timedelta(minutes=app.config["LOGIN_LOCKOUT_MINUTES"])
 
 
-def parse_lockout(locked_until: str | None) -> datetime | None:
-    if not locked_until:
+def parse_lockout(locked_until: datetime | None) -> datetime | None:
+    if locked_until is None:
         return None
-    try:
-        return datetime.fromisoformat(locked_until)
-    except ValueError:
-        return None
-
-
-def reset_login_failures(db: sqlite3.Connection, user_id: int) -> None:
-    db.execute(
-        """
-        UPDATE users
-        SET failed_login_attempts = 0,
-            locked_until = NULL
-        WHERE id = ?
-        """,
-        (user_id,),
-    )
-
-
-def register_failed_login(db: sqlite3.Connection, user_id: int, failed_attempts: int) -> None:
-    locked_until = None
-    if failed_attempts >= app.config["MAX_LOGIN_ATTEMPTS"]:
-        locked_until = get_lockout_expiration()
-
-    db.execute(
-        """
-        UPDATE users
-        SET failed_login_attempts = ?,
-            locked_until = ?
-        WHERE id = ?
-        """,
-        (failed_attempts, locked_until, user_id),
-    )
+    if locked_until.tzinfo is None:
+        return locked_until.replace(tzinfo=timezone.utc)
+    return locked_until
 
 
 def stripe_checkout_ready() -> bool:
@@ -245,44 +117,15 @@ def gift_card_override_matches(code: str) -> bool:
     return bool(configured_code and code.strip() == configured_code)
 
 
-def create_user_account(db: sqlite3.Connection, username: str, password: str) -> None:
-    db.execute(
-        "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-        (username, hash_password(password)),
-    )
-    db.commit()
+def create_user_account(username: str, password: str) -> None:
+    db.create_user(username, hash_password(password))
 
 
-def get_user_notes(user_id: int) -> list[sqlite3.Row]:
-    db = get_db()
-    return db.execute(
-        """
-        SELECT id, content, created_at
-        FROM notes
-        WHERE user_id = ?
-        ORDER BY created_at DESC, id DESC
-        """,
-        (user_id,),
-    ).fetchall()
-
-
-def get_user_note(user_id: int, note_id: int) -> sqlite3.Row | None:
-    db = get_db()
-    return db.execute(
-        """
-        SELECT id, content, created_at
-        FROM notes
-        WHERE user_id = ? AND id = ?
-        """,
-        (user_id, note_id),
-    ).fetchone()
-
-
-def get_note_map(notes_list: list[sqlite3.Row]) -> dict[int, sqlite3.Row]:
+def get_note_map(notes_list: list[dict]) -> dict[int, dict]:
     return {int(note["id"]): note for note in notes_list}
 
 
-def get_selected_note_id(notes_list: list[sqlite3.Row]) -> int | None:
+def get_selected_note_id(notes_list: list[dict]) -> int | None:
     available_ids = [int(note["id"]) for note in notes_list]
     stored_id = session.get("assistant_selected_note_id")
     if isinstance(stored_id, int) and stored_id in available_ids:
@@ -297,38 +140,11 @@ def set_selected_note_id(selected_id: int | None) -> None:
         session["assistant_selected_note_id"] = selected_id
 
 
-def today_key() -> str:
-    return date.today().isoformat()
+def today_key() -> date:
+    return date.today()
 
 
-def get_note_review_count(note_id: int) -> int:
-    db = get_db()
-    row = db.execute(
-        """
-        SELECT request_count
-        FROM note_review_usage
-        WHERE note_id = ? AND usage_date = ?
-        """,
-        (note_id, today_key()),
-    ).fetchone()
-    return int(row["request_count"]) if row else 0
-
-
-def increment_note_review_count(note_id: int) -> None:
-    db = get_db()
-    db.execute(
-        """
-        INSERT INTO note_review_usage (note_id, usage_date, request_count)
-        VALUES (?, ?, 1)
-        ON CONFLICT(note_id, usage_date)
-        DO UPDATE SET request_count = request_count + 1
-        """,
-        (note_id, today_key()),
-    )
-    db.commit()
-
-
-def build_notes_context(notes_list: list[sqlite3.Row]) -> str:
+def build_notes_context(notes_list: list[dict]) -> str:
     if not notes_list:
         return "O usuario ainda nao possui anotacoes."
 
@@ -339,7 +155,7 @@ def build_notes_context(notes_list: list[sqlite3.Row]) -> str:
     return "\n".join(formatted_notes)
 
 
-def ask_gemini_for_medical_review(notes_list: list[sqlite3.Row]) -> str:
+def ask_gemini_for_medical_review(notes_list: list[dict]) -> str:
     if genai is None:
         raise RuntimeError("sdk_missing")
 
@@ -403,7 +219,7 @@ def clean_assistant_text(text: str) -> str:
     return cleaned.strip()
 
 
-def build_note_pdf(note: sqlite3.Row) -> BytesIO:
+def build_note_pdf(note: dict) -> BytesIO:
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
@@ -506,24 +322,22 @@ def index():
     return redirect(url_for("login"))
 
 
+@app.route("/healthz", methods=["GET"])
+def healthz():
+    db.fetch_one("SELECT 1 AS ok")
+    return {"ok": True}, 200
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        db = get_db()
-        user = db.execute(
-            """
-            SELECT id, username, password_hash, failed_login_attempts, locked_until
-            FROM users
-            WHERE username = ?
-            """,
-            (username,),
-        ).fetchone()
+        user = db.find_user_by_username(username)
 
         if user:
             locked_until = parse_lockout(user["locked_until"])
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             if locked_until and locked_until > now:
                 flash(
                     "Muitas tentativas invalidas. Tente novamente em 15 minutos.",
@@ -532,21 +346,23 @@ def login():
                 return render_template("login.html")
 
             if verify_password(user["password_hash"], password):
-                reset_login_failures(db, user["id"])
+                db.reset_login_failures(int(user["id"]))
                 if not is_bcrypt_hash(user["password_hash"]):
-                    db.execute(
-                        "UPDATE users SET password_hash = ? WHERE id = ?",
-                        (hash_password(password), user["id"]),
-                    )
-                db.commit()
+                    db.update_user_password(int(user["id"]), hash_password(password))
+                else:
+                    db.get_db().commit()
                 session["logged_in"] = True
-                session["user_id"] = user["id"]
+                session["user_id"] = int(user["id"])
                 session["username"] = user["username"]
                 return redirect(url_for("notes"))
 
             failed_attempts = int(user["failed_login_attempts"]) + 1
-            register_failed_login(db, user["id"], failed_attempts)
-            db.commit()
+            db.register_failed_login(
+                int(user["id"]),
+                failed_attempts,
+                lockout_expiration() if failed_attempts >= app.config["MAX_LOGIN_ATTEMPTS"] else None,
+            )
+            db.get_db().commit()
 
             remaining_attempts = app.config["MAX_LOGIN_ATTEMPTS"] - failed_attempts
             if remaining_attempts > 0:
@@ -573,7 +389,6 @@ def register():
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
         gift_card_code = request.form.get("gift_card_code", "").strip()
-        db = get_db()
 
         if len(username) < 3:
             flash("O nome de usuario precisa ter pelo menos 3 caracteres.", "error")
@@ -582,14 +397,11 @@ def register():
         elif password != confirm_password:
             flash("As senhas nao conferem.", "error")
         else:
-            existing_user = db.execute(
-                "SELECT id FROM users WHERE username = ?",
-                (username,),
-            ).fetchone()
+            existing_user = db.find_user_by_username(username)
             if existing_user is not None:
                 flash("Esse nome de usuario ja esta em uso.", "error")
             elif gift_card_override_matches(gift_card_code):
-                create_user_account(db, username, password)
+                create_user_account(username, password)
                 session.pop("pending_registration", None)
                 flash("Conta criada com codigo de teste. Agora voce pode entrar.", "success")
                 return redirect(url_for("login"))
@@ -647,12 +459,7 @@ def create_checkout_session():
         price = prices.data[0]
         checkout_session = stripe.checkout.Session.create(
             mode="payment",
-            line_items=[
-                {
-                    "price": price.id,
-                    "quantity": 1,
-                }
-            ],
+            line_items=[{"price": price.id, "quantity": 1}],
             metadata={"pending_username": pending_registration["username"]},
             success_url=absolute_url("checkout_success") + "?session_id={CHECKOUT_SESSION_ID}",
             cancel_url=absolute_url("checkout_cancel"),
@@ -685,18 +492,13 @@ def checkout_success():
         flash("O pagamento ainda nao foi confirmado.", "error")
         return redirect(url_for("pricing"))
 
-    db = get_db()
-    existing_user = db.execute(
-        "SELECT id FROM users WHERE username = ?",
-        (pending_registration["username"],),
-    ).fetchone()
+    existing_user = db.find_user_by_username(pending_registration["username"])
     if existing_user is not None:
         session.pop("pending_registration", None)
         flash("Esse nome de usuario ja foi utilizado. Escolha outro para continuar.", "error")
         return redirect(url_for("register"))
 
     create_user_account(
-        db,
         pending_registration["username"],
         pending_registration["password"],
     )
@@ -728,7 +530,7 @@ def logout():
 @login_required
 def notes():
     review_output = session.pop("review_output", None)
-    notes_list = get_user_notes(current_user_id())
+    notes_list = db.list_user_notes(current_user_id())
     note_map = get_note_map(notes_list)
     selected_note_id = get_selected_note_id(notes_list)
 
@@ -746,13 +548,13 @@ def notes():
 
             if selected_note_id is None:
                 flash("Selecione uma anotacao para usar como contexto.", "error")
-            elif get_note_review_count(selected_note_id) >= 4:
+            elif db.get_note_review_count(selected_note_id, today_key()) >= 4:
                 flash("Essa anotacao ja atingiu o limite diario de 4 analises.", "error")
             else:
                 selected_notes = [note_map[selected_note_id]]
                 try:
                     review_output = ask_gemini_for_medical_review(selected_notes)
-                    increment_note_review_count(selected_note_id)
+                    db.increment_note_review_count(selected_note_id, today_key())
                     session["review_output"] = review_output
                     return redirect(url_for("notes"))
                 except RuntimeError as exc:
@@ -775,17 +577,15 @@ def notes():
             if not content:
                 flash("A anotacao nao pode ficar vazia.", "error")
             else:
-                db = get_db()
-                db.execute(
-                    "INSERT INTO notes (user_id, content) VALUES (?, ?)",
-                    (current_user_id(), content),
-                )
-                db.commit()
+                db.create_note(current_user_id(), content)
                 flash("Anotacao salva.", "success")
                 return redirect(url_for("notes"))
 
     selected_note_id = get_selected_note_id(notes_list)
-    review_counts = {int(note["id"]): get_note_review_count(int(note["id"])) for note in notes_list}
+    review_counts = {
+        int(note["id"]): db.get_note_review_count(int(note["id"]), today_key())
+        for note in notes_list
+    }
     return render_template(
         "notes.html",
         notes=notes_list,
@@ -799,12 +599,7 @@ def notes():
 @app.route("/notes/<int:note_id>/delete", methods=["POST"])
 @login_required
 def delete_note(note_id: int):
-    db = get_db()
-    db.execute(
-        "DELETE FROM notes WHERE id = ? AND user_id = ?",
-        (note_id, current_user_id()),
-    )
-    db.commit()
+    db.delete_note(current_user_id(), note_id)
     flash("Anotacao removida.", "success")
     return redirect(url_for("notes"))
 
@@ -812,7 +607,7 @@ def delete_note(note_id: int):
 @app.route("/notes/<int:note_id>/pdf", methods=["GET"])
 @login_required
 def download_note_pdf(note_id: int):
-    note = get_user_note(current_user_id(), note_id)
+    note = db.get_user_note(current_user_id(), note_id)
     if note is None:
         flash("Anotacao nao encontrada.", "error")
         return redirect(url_for("notes"))
@@ -823,6 +618,9 @@ def download_note_pdf(note_id: int):
         as_attachment=True,
         download_name=f"anotacao-{note_id}.pdf",
     )
+
+
+ensure_database()
 
 
 if __name__ == "__main__":
