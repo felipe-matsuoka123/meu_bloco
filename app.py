@@ -1,6 +1,7 @@
 import os
 import re
 import unicodedata
+import json
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache, wraps
 from io import BytesIO
@@ -140,6 +141,61 @@ def set_selected_note_id(selected_id: int | None) -> None:
         session["assistant_selected_note_id"] = selected_id
 
 
+def get_active_tab() -> str:
+    tab = request.args.get("tab", "").strip().lower()
+    if tab in {"notes", "sbar"}:
+        return tab
+    return "notes"
+
+
+def get_selected_sbar_note_ids(notes_list: list[dict]) -> list[int]:
+    available_ids = {int(note["id"]) for note in notes_list}
+    stored_ids = session.get("sbar_selected_note_ids", [])
+    if not isinstance(stored_ids, list):
+        return []
+    return [note_id for note_id in stored_ids if isinstance(note_id, int) and note_id in available_ids]
+
+
+def set_selected_sbar_note_ids(selected_ids: list[int]) -> None:
+    session["sbar_selected_note_ids"] = selected_ids
+
+
+def get_saved_sbar(user_id: int) -> tuple[list[int], list[dict[str, str | int]] | None]:
+    saved_sbar = db.get_user_saved_sbar(user_id)
+    if saved_sbar is None:
+        return [], None
+
+    raw_selected_ids = saved_sbar.get("selected_note_ids")
+    selected_note_ids = (
+        [int(note_id) for note_id in raw_selected_ids if isinstance(note_id, int)]
+        if isinstance(raw_selected_ids, list)
+        else []
+    )
+
+    raw_rows = saved_sbar.get("rows")
+    if not isinstance(raw_rows, list):
+        return selected_note_ids, None
+
+    rows: list[dict[str, str | int]] = []
+    for item in raw_rows:
+        if not isinstance(item, dict):
+            continue
+        note_id = item.get("note_id")
+        if not isinstance(note_id, int):
+            continue
+        rows.append(
+            {
+                "note_id": note_id,
+                "situacao": clean_assistant_text(str(item.get("situacao", "Nao informado."))) or "Nao informado.",
+                "background": clean_assistant_text(str(item.get("background", "Nao informado."))) or "Nao informado.",
+                "avaliacao": clean_assistant_text(str(item.get("avaliacao", "Nao informado."))) or "Nao informado.",
+                "recomendacao": clean_assistant_text(str(item.get("recomendacao", "Nao informado."))) or "Nao informado.",
+            }
+        )
+
+    return selected_note_ids, rows or None
+
+
 def get_editing_note_id(notes_list: list[dict]) -> int | None:
     available_ids = {int(note["id"]) for note in notes_list}
     editing_raw = request.args.get("edit", "").strip()
@@ -216,6 +272,149 @@ Anotacoes do usuario:
     if not text:
         raise RuntimeError("empty_response")
     return clean_assistant_text(text)
+
+
+def build_sbar_context(notes_list: list[dict]) -> str:
+    if not notes_list:
+        return "Nenhuma anotacao fornecida."
+
+    formatted_notes = []
+    for note in notes_list:
+        safe_content, _ = redact_note_content(note["content"])
+        formatted_notes.append(
+            "\n".join(
+                [
+                    f"Anotacao #{note['id']}",
+                    f"Criado em: {note['created_at']}",
+                    safe_content,
+                ]
+            )
+        )
+    return "\n\n".join(formatted_notes)
+
+
+def extract_json_payload(text: str) -> str:
+    candidate = text.strip()
+    fenced_match = re.search(r"```(?:json)?\s*(.*?)```", candidate, flags=re.DOTALL)
+    if fenced_match:
+        candidate = fenced_match.group(1).strip()
+
+    start = candidate.find("[")
+    end = candidate.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        return candidate[start : end + 1]
+    raise RuntimeError("invalid_json")
+
+
+def ask_gemini_for_sbar_rows(notes_list: list[dict]) -> list[dict[str, str | int]]:
+    if genai is None:
+        raise RuntimeError("sdk_missing")
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("api_key_missing")
+
+    client = genai.Client(api_key=api_key)
+    prompt = f"""
+Voce e um medico organizando uma passagem de caso no formato SBAR.
+Analise apenas as anotacoes fornecidas.
+Escreva em portugues do Brasil.
+Retorne exatamente um JSON valido contendo uma lista.
+Cada item da lista deve corresponder a uma anotacao de entrada.
+Nao inclua markdown, explicacoes, comentarios ou texto fora do JSON.
+Use esta estrutura exata em cada item:
+{{
+  "note_id": 123,
+  "situacao": "...",
+  "background": "...",
+  "avaliacao": "...",
+  "recomendacao": "..."
+}}
+
+Regras:
+- Gere uma linha por anotacao.
+- Cada campo deve ser curto, clinico e util para passagem de caso.
+- Nao invente fatos ausentes.
+- Se faltar informacao para algum campo, escreva "Nao informado."
+- As partes marcadas como [REMOVIDO] sao anonimização e devem ser ignoradas.
+- Nao cite data de criacao como se fosse dado clinico.
+- Baseie cada linha apenas no conteudo da propria anotacao correspondente.
+
+Anotacoes:
+{build_sbar_context(notes_list)}
+""".strip()
+
+    response = client.models.generate_content(
+        model=app.config["GEMINI_MODEL"],
+        contents=prompt,
+    )
+    text = getattr(response, "text", None)
+    if not text:
+        raise RuntimeError("empty_response")
+
+    try:
+        parsed = json.loads(extract_json_payload(text))
+    except (json.JSONDecodeError, RuntimeError):
+        raise RuntimeError("invalid_json") from None
+
+    if not isinstance(parsed, list):
+        raise RuntimeError("invalid_json")
+
+    valid_note_ids = {int(note["id"]) for note in notes_list}
+    cleaned_rows: list[dict[str, str | int]] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            raise RuntimeError("invalid_json")
+
+        raw_note_id = item.get("note_id")
+        note_id = int(raw_note_id) if isinstance(raw_note_id, int) else None
+        if note_id not in valid_note_ids:
+            raise RuntimeError("invalid_json")
+
+        cleaned_rows.append(
+            {
+                "note_id": note_id,
+                "situacao": clean_assistant_text(str(item.get("situacao", "Nao informado."))) or "Nao informado.",
+                "background": clean_assistant_text(str(item.get("background", "Nao informado."))) or "Nao informado.",
+                "avaliacao": clean_assistant_text(str(item.get("avaliacao", "Nao informado."))) or "Nao informado.",
+                "recomendacao": clean_assistant_text(str(item.get("recomendacao", "Nao informado."))) or "Nao informado.",
+            }
+        )
+
+    cleaned_rows.sort(key=lambda row: [int(note["id"]) for note in notes_list].index(int(row["note_id"])))
+    return cleaned_rows
+
+
+def get_sbar_rows_from_form() -> list[dict[str, str | int]]:
+    note_ids = request.form.getlist("sbar_note_id")
+    situacoes = request.form.getlist("sbar_situacao")
+    backgrounds = request.form.getlist("sbar_background")
+    avaliacoes = request.form.getlist("sbar_avaliacao")
+    recomendacoes = request.form.getlist("sbar_recomendacao")
+
+    row_count = len(note_ids)
+    if not row_count or not all(
+        len(values) == row_count
+        for values in (situacoes, backgrounds, avaliacoes, recomendacoes)
+    ):
+        raise RuntimeError("invalid_sbar_form")
+
+    rows: list[dict[str, str | int]] = []
+    for index, note_id_raw in enumerate(note_ids):
+        if not note_id_raw.isdigit():
+            raise RuntimeError("invalid_sbar_form")
+
+        rows.append(
+            {
+                "note_id": int(note_id_raw),
+                "situacao": clean_assistant_text(situacoes[index]) or "Nao informado.",
+                "background": clean_assistant_text(backgrounds[index]) or "Nao informado.",
+                "avaliacao": clean_assistant_text(avaliacoes[index]) or "Nao informado.",
+                "recomendacao": clean_assistant_text(recomendacoes[index]) or "Nao informado.",
+            }
+        )
+
+    return rows
 
 
 def clean_assistant_text(text: str) -> str:
@@ -538,13 +737,21 @@ def logout():
 @login_required
 def notes():
     review_output = session.pop("review_output", None)
-    notes_list = db.list_user_notes(current_user_id())
+    user_id = current_user_id()
+    saved_sbar_note_ids, saved_sbar_output = get_saved_sbar(user_id)
+    sbar_output = saved_sbar_output
+    notes_list = db.list_user_notes(user_id)
     note_map = get_note_map(notes_list)
     selected_note_id = get_selected_note_id(notes_list)
+    selected_sbar_note_ids = saved_sbar_note_ids or get_selected_sbar_note_ids(notes_list)
     editing_note_id = get_editing_note_id(notes_list)
+    active_tab = get_active_tab()
 
     if request.method == "POST":
         form_name = request.form.get("form_name")
+        active_tab = request.form.get("active_tab", active_tab).strip().lower()
+        if active_tab not in {"notes", "sbar"}:
+            active_tab = "notes"
 
         if form_name == "review":
             selected_note_raw = request.form.get("selected_note_id", "").strip()
@@ -577,6 +784,49 @@ def notes():
                         flash("Nao foi possivel consultar o Gemini.", "error")
                 except Exception:
                     flash("Ocorreu um erro ao consultar o Gemini.", "error")
+        elif form_name == "generate_sbar":
+            selected_sbar_note_ids = [
+                int(note_id)
+                for note_id in request.form.getlist("selected_note_ids")
+                if note_id.isdigit() and int(note_id) in note_map
+            ]
+            selected_sbar_note_ids = list(dict.fromkeys(selected_sbar_note_ids))
+            set_selected_sbar_note_ids(selected_sbar_note_ids)
+
+            if not selected_sbar_note_ids:
+                flash("Selecione pelo menos uma anotacao para montar a tabela SBAR.", "error")
+            else:
+                selected_notes = [note_map[note_id] for note_id in selected_sbar_note_ids]
+                try:
+                    sbar_output = ask_gemini_for_sbar_rows(selected_notes)
+                    db.save_user_sbar(user_id, selected_sbar_note_ids, sbar_output)
+                    return redirect(url_for("notes", tab="sbar"))
+                except RuntimeError as exc:
+                    if str(exc) == "sdk_missing":
+                        flash("A biblioteca google-genai nao esta instalada no ambiente.", "error")
+                    elif str(exc) == "api_key_missing":
+                        flash("Defina a variavel GEMINI_API_KEY para ativar o assistente.", "error")
+                    elif str(exc) == "empty_response":
+                        flash("O Gemini nao retornou texto nesta tentativa.", "error")
+                    elif str(exc) == "invalid_json":
+                        flash("O Gemini retornou um formato invalido para a tabela SBAR.", "error")
+                    else:
+                        flash("Nao foi possivel consultar o Gemini.", "error")
+                except Exception:
+                    flash("Ocorreu um erro ao consultar o Gemini.", "error")
+        elif form_name == "clear_sbar":
+            db.delete_user_sbar(user_id)
+            session.pop("sbar_selected_note_ids", None)
+            selected_sbar_note_ids = []
+            sbar_output = None
+            flash("Tabela SBAR removida.", "success")
+        elif form_name == "save_sbar":
+            try:
+                sbar_output = get_sbar_rows_from_form()
+                db.save_user_sbar(user_id, selected_sbar_note_ids, sbar_output)
+                flash("Tabela SBAR salva.", "success")
+            except RuntimeError:
+                flash("Nao foi possivel salvar as edicoes da tabela SBAR.", "error")
         elif form_name == "clear_review":
             session.pop("review_output", None)
             review_output = None
@@ -586,11 +836,15 @@ def notes():
             if not content:
                 flash("A anotacao nao pode ficar vazia.", "error")
             else:
-                db.create_note(current_user_id(), content)
+                db.create_note(user_id, content)
+                session.pop("review_output", None)
                 flash("Anotacao salva.", "success")
                 return redirect(url_for("notes"))
 
     selected_note_id = get_selected_note_id(notes_list)
+    selected_sbar_note_ids = [
+        note_id for note_id in selected_sbar_note_ids if note_id in note_map
+    ]
     review_counts = {
         int(note["id"]): db.get_note_review_count(int(note["id"]), today_key())
         for note in notes_list
@@ -600,9 +854,12 @@ def notes():
         notes=notes_list,
         editing_note_id=editing_note_id,
         model_name=app.config["GEMINI_MODEL"],
+        active_tab=active_tab,
         selected_note_id=selected_note_id,
+        selected_sbar_note_ids=selected_sbar_note_ids,
         review_counts=review_counts,
         review_output=review_output,
+        sbar_output=sbar_output,
     )
 
 
@@ -618,6 +875,7 @@ def edit_note(note_id: int):
         flash("Anotacao nao encontrada.", "error")
         return redirect(url_for("notes"))
 
+    session.pop("review_output", None)
     flash("Anotacao atualizada.", "success")
     return redirect(url_for("notes"))
 
@@ -626,6 +884,7 @@ def edit_note(note_id: int):
 @login_required
 def delete_note(note_id: int):
     db.delete_note(current_user_id(), note_id)
+    session.pop("review_output", None)
     flash("Anotacao removida.", "success")
     return redirect(url_for("notes"))
 

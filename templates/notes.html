@@ -18,79 +18,47 @@
         </div>
     </header>
 
-    <section class="workspace-grid">
-        <section class="workspace-main">
-            <form method="post" class="stack composer-card">
-                <input type="hidden" name="form_name" value="note">
-                <label class="field">
-                    <span>Nova anotação</span>
-                    <textarea name="content" rows="6" placeholder="Escreva sua evolução clínica aqui ..." required></textarea>
-                </label>
-                <button type="submit">Salvar anotação</button>
-            </form>
+    <nav class="workspace-tabs" aria-label="Seções do painel">
+        <a href="{{ url_for('notes', tab='notes') }}" class="workspace-tab {% if active_tab == 'notes' %}is-active{% endif %}">Anotações</a>
+        <a href="{{ url_for('notes', tab='sbar') }}" class="workspace-tab {% if active_tab == 'sbar' %}is-active{% endif %}">Tabela SBAR</a>
+    </nav>
 
-            <section class="notes-list">
-                {% if notes %}
-                    {% for note in notes %}
-                        <article class="note-item">
-                            <div class="note-meta">
-                                <span>Anotação #{{ note["id"] }}</span>
-                                <span>{{ note["created_at"] }}</span>
-                            </div>
-                            {% if note['id'] == editing_note_id %}
-                                <form method="post" action="{{ url_for('edit_note', note_id=note['id']) }}" class="stack note-edit-form">
-                                    <label class="field">
-                                        <span>Editar anotação</span>
-                                        <textarea name="content" rows="7" required>{{ note["content"] }}</textarea>
-                                    </label>
-                                    <div class="note-actions">
-                                        <button type="submit">Salvar alterações</button>
-                                        <a href="{{ url_for('notes') }}" class="ghost-link">Cancelar</a>
-                                    </div>
-                                </form>
-                            {% else %}
-                                <p class="note-content">{{ note["content"] }}</p>
-                                <div class="note-actions">
-                                    <a href="{{ url_for('notes', edit=note['id']) }}" class="ghost-link">Editar</a>
-                                    <a href="{{ url_for('download_note_pdf', note_id=note['id']) }}" class="ghost-link">Baixar PDF</a>
-                                    <form method="post" action="{{ url_for('delete_note', note_id=note['id']) }}">
-                                        <button type="submit" class="danger-button">Excluir</button>
-                                    </form>
-                                </div>
-                            {% endif %}
-                        </article>
-                    {% endfor %}
-                {% else %}
-                    <div class="empty-state">Nenhuma anotação ainda. Crie a primeira usando o campo acima.</div>
-                {% endif %}
-            </section>
-        </section>
+    {% if active_tab == "sbar" %}
+        <section class="workspace-sbar">
+            <section class="composer-card stack">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Passagem de caso</p>
+                        <h2>Gerar tabela SBAR</h2>
+                    </div>
+                    <p class="muted">Selecione as anotações que devem virar linhas da tabela. O Gemini gera o texto de Situação, Background, Avaliação e Recomendação para cada uma.</p>
+                </div>
 
-        <aside class="copilot-sidebar">
-            <section class="assistant-card">
-                <form method="post" class="stack review-form" data-loading-form>
-                    <input type="hidden" name="form_name" value="review">
+                <form method="post" class="stack" data-loading-form>
+                    <input type="hidden" name="form_name" value="generate_sbar">
+                    <input type="hidden" name="active_tab" value="sbar">
+
                     <section class="context-panel">
                         <div class="context-header">
                             <div>
                                 <p class="eyebrow">Contexto</p>
-                                <h3>Selecionadas</h3>
+                                <h3>Anotações incluídas</h3>
                             </div>
-                            <span class="context-counter">{% if selected_note_id %}1 selecionada{% else %}0 selecionadas{% endif %}</span>
+                            <span class="context-counter">{{ selected_sbar_note_ids|length }} selecionadas</span>
                         </div>
 
-                        <div class="context-list">
+                        <div class="context-list context-list-large">
                             {% for note in notes %}
                                 <label class="context-item">
                                     <input
-                                        type="radio"
-                                        name="selected_note_id"
+                                        type="checkbox"
+                                        name="selected_note_ids"
                                         value="{{ note['id'] }}"
-                                        {% if note['id'] == selected_note_id %}checked{% endif %}
+                                        {% if note['id'] in selected_sbar_note_ids %}checked{% endif %}
                                     >
                                     <span>
                                         <strong>Anotação #{{ note["id"] }}</strong>
-                                        <small>{{ review_counts[note["id"]] }}/4 hoje</small>
+                                        <small>{{ note["created_at"] }}</small>
                                     </span>
                                 </label>
                             {% endfor %}
@@ -99,43 +67,327 @@
 
                     <div class="assistant-actions">
                         <button type="submit" class="loading-button" data-loading-button>
-                            <span class="button-label">Revisar historico</span>
+                            <span class="button-label">Gerar tabela SBAR</span>
                             <span class="button-loading" aria-hidden="true">
                                 <span class="spinner"></span>
-                                Gerando analise...
+                                Gerando tabela...
                             </span>
                         </button>
                     </div>
-                    <p class="review-help muted">Usando IA, gere uma revisão curta com os principais pontos pouco claros, faltantes ou em aberto.</p>
                 </form>
 
-                {% if review_output %}
-                    <section class="review-panel">
-                        <p class="eyebrow">Analise</p>
-                        <div class="review-output">{{ review_output }}</div>
-                    </section>
-                    <form method="post" class="inline-form">
-                        <input type="hidden" name="form_name" value="clear_review">
-                        <button type="submit" class="ghost-button">Limpar analise</button>
-                    </form>
+                {% if sbar_output %}
+                    <div class="assistant-actions">
+                        <form method="post" class="inline-form">
+                            <input type="hidden" name="form_name" value="clear_sbar">
+                            <input type="hidden" name="active_tab" value="sbar">
+                            <button type="submit" class="ghost-button">Limpar tabela</button>
+                        </form>
+                        <button type="button" class="secondary-button" data-print-sbar>Imprimir</button>
+                    </div>
                 {% endif %}
             </section>
-        </aside>
-    </section>
+
+            {% if sbar_output %}
+                <section class="sbar-output-card print-area">
+                    <div class="sbar-output-header">
+                        <div>
+                            <p class="eyebrow">Resultado</p>
+                            <h2>Tabela SBAR</h2>
+                        </div>
+                        <p class="muted">Uma linha por anotação selecionada. Você pode editar qualquer célula, salvar e reencontrar essa tabela depois do login.</p>
+                    </div>
+
+                    <form method="post" class="stack">
+                        <input type="hidden" name="form_name" value="save_sbar">
+                        <input type="hidden" name="active_tab" value="sbar">
+
+                        <div class="table-scroll">
+                            <table class="sbar-table">
+                                <thead>
+                                    <tr>
+                                        <th>Anotação</th>
+                                        <th>Situação</th>
+                                        <th>Background</th>
+                                        <th>Avaliação</th>
+                                        <th>Recomendação</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in sbar_output %}
+                                        <tr>
+                                            <td>
+                                                <input type="hidden" name="sbar_note_id" value="{{ row['note_id'] }}">
+                                                <strong>#{{ row["note_id"] }}</strong>
+                                            </td>
+                                            <td>
+                                                <textarea name="sbar_situacao" rows="6" class="table-textarea">{{ row["situacao"] }}</textarea>
+                                                <div class="table-print-text" aria-hidden="true"></div>
+                                            </td>
+                                            <td>
+                                                <textarea name="sbar_background" rows="6" class="table-textarea">{{ row["background"] }}</textarea>
+                                                <div class="table-print-text" aria-hidden="true"></div>
+                                            </td>
+                                            <td>
+                                                <textarea name="sbar_avaliacao" rows="6" class="table-textarea">{{ row["avaliacao"] }}</textarea>
+                                                <div class="table-print-text" aria-hidden="true"></div>
+                                            </td>
+                                            <td>
+                                                <textarea name="sbar_recomendacao" rows="6" class="table-textarea">{{ row["recomendacao"] }}</textarea>
+                                                <div class="table-print-text" aria-hidden="true"></div>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="assistant-actions no-print">
+                            <button type="submit">Salvar tabela</button>
+                        </div>
+                    </form>
+                </section>
+            {% elif notes %}
+                <section class="empty-state">
+                    Nenhuma tabela gerada ainda. Selecione uma ou mais anotações e clique em gerar.
+                </section>
+            {% else %}
+                <section class="empty-state">
+                    Nenhuma anotação ainda. Crie anotações primeiro para montar a tabela SBAR.
+                </section>
+            {% endif %}
+        </section>
+    {% else %}
+        <section class="workspace-grid">
+            <section class="workspace-main">
+                <form method="post" class="stack composer-card">
+                    <input type="hidden" name="form_name" value="note">
+                    <input type="hidden" name="active_tab" value="notes">
+                    <label class="field">
+                        <span>Nova anotação</span>
+                        <textarea name="content" rows="6" placeholder="Escreva sua evolução clínica aqui ..." required></textarea>
+                    </label>
+                    <button type="submit">Salvar anotação</button>
+                </form>
+
+                <section class="notes-list">
+                    {% if notes %}
+                        {% for note in notes %}
+                            <article class="note-item">
+                                <button
+                                    type="button"
+                                    class="note-meta note-meta-toggle"
+                                    data-note-toggle
+                                    aria-expanded="true"
+                                >
+                                    <span>Anotação #{{ note["id"] }}</span>
+                                    <span>{{ note["created_at"] }}</span>
+                                </button>
+                                {% if note['id'] == editing_note_id %}
+                                    <form method="post" action="{{ url_for('edit_note', note_id=note['id']) }}" class="stack note-edit-form">
+                                        <label class="field">
+                                            <span>Editar anotação</span>
+                                            <textarea name="content" rows="7" required>{{ note["content"] }}</textarea>
+                                        </label>
+                                        <div class="note-actions">
+                                            <button type="submit">Salvar alterações</button>
+                                            <a href="{{ url_for('notes', tab='notes') }}" class="ghost-link">Cancelar</a>
+                                        </div>
+                                    </form>
+                                {% else %}
+                                    <div class="note-collapsible" data-note-collapsible data-note-id="{{ note['id'] }}">
+                                        <button
+                                            type="button"
+                                            class="note-preview"
+                                            data-note-preview
+                                            hidden
+                                        >
+                                            {{ note["content"]|replace('\n', ' ') }}
+                                        </button>
+                                        <div class="note-body" data-note-body>
+                                            <p class="note-content">{{ note["content"] }}</p>
+                                            <div class="note-actions">
+                                                <a href="{{ url_for('notes', edit=note['id'], tab='notes') }}" class="ghost-link">Editar</a>
+                                                <a href="{{ url_for('download_note_pdf', note_id=note['id']) }}" class="ghost-link">Baixar PDF</a>
+                                                <form method="post" action="{{ url_for('delete_note', note_id=note['id']) }}">
+                                                    <button type="submit" class="danger-button">Excluir</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            </article>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">Nenhuma anotação ainda. Crie a primeira usando o campo acima.</div>
+                    {% endif %}
+                </section>
+            </section>
+
+            <aside class="copilot-sidebar">
+                <section class="assistant-card">
+                    <form method="post" class="stack review-form" data-loading-form>
+                        <input type="hidden" name="form_name" value="review">
+                        <input type="hidden" name="active_tab" value="notes">
+                        <section class="context-panel">
+                            <div class="context-header">
+                                <div>
+                                    <p class="eyebrow">Contexto</p>
+                                    <h3>Selecionadas</h3>
+                                </div>
+                                <span class="context-counter">{% if selected_note_id %}1 selecionada{% else %}0 selecionadas{% endif %}</span>
+                            </div>
+
+                            <div class="context-list">
+                                {% for note in notes %}
+                                    <label class="context-item">
+                                        <input
+                                            type="radio"
+                                            name="selected_note_id"
+                                            value="{{ note['id'] }}"
+                                            {% if note['id'] == selected_note_id %}checked{% endif %}
+                                        >
+                                        <span>
+                                            <strong>Anotação #{{ note["id"] }}</strong>
+                                            <small>{{ review_counts[note["id"]] }}/4 hoje</small>
+                                        </span>
+                                    </label>
+                                {% endfor %}
+                            </div>
+                        </section>
+
+                        <div class="assistant-actions">
+                            <button type="submit" class="loading-button" data-loading-button>
+                                <span class="button-label">Revisar historico</span>
+                                <span class="button-loading" aria-hidden="true">
+                                    <span class="spinner"></span>
+                                    Gerando analise...
+                                </span>
+                            </button>
+                        </div>
+                        <p class="review-help muted">Usando IA, gere uma revisão curta com os principais pontos pouco claros, faltantes ou em aberto.</p>
+                    </form>
+
+                    {% if review_output %}
+                        <section class="review-panel">
+                            <p class="eyebrow">Analise</p>
+                            <div class="review-output">{{ review_output }}</div>
+                        </section>
+                        <form method="post" class="inline-form">
+                            <input type="hidden" name="form_name" value="clear_review">
+                            <input type="hidden" name="active_tab" value="notes">
+                            <button type="submit" class="ghost-button">Limpar analise</button>
+                        </form>
+                    {% endif %}
+                </section>
+            </aside>
+        </section>
+    {% endif %}
 </section>
 {% endblock %}
 
 {% block scripts %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const form = document.querySelector("[data-loading-form]");
-    if (!form) return;
+    function autosizeTextarea(textarea) {
+        textarea.style.height = "auto";
+        textarea.style.height = textarea.scrollHeight + "px";
+    }
 
-    form.addEventListener("submit", function () {
-        const button = form.querySelector("[data-loading-button]");
-        if (!button) return;
-        button.disabled = true;
-        button.classList.add("is-loading");
+    document.querySelectorAll("[data-loading-form]").forEach(function (form) {
+        form.addEventListener("submit", function () {
+            const button = form.querySelector("[data-loading-button]");
+            if (!button) return;
+            button.disabled = true;
+            button.classList.add("is-loading");
+        });
+    });
+
+    const tableTextareas = document.querySelectorAll(".table-textarea");
+    tableTextareas.forEach(function (textarea) {
+        autosizeTextarea(textarea);
+        textarea.addEventListener("input", function () {
+            autosizeTextarea(textarea);
+            const printTarget = textarea.parentElement.querySelector(".table-print-text");
+            if (printTarget) {
+                printTarget.textContent = textarea.value;
+            }
+        });
+
+        const printTarget = textarea.parentElement.querySelector(".table-print-text");
+        if (printTarget) {
+            printTarget.textContent = textarea.value;
+        }
+    });
+
+    function expandTableForPrint() {
+        tableTextareas.forEach(function (textarea) {
+            autosizeTextarea(textarea);
+            const printTarget = textarea.parentElement.querySelector(".table-print-text");
+            if (printTarget) {
+                printTarget.textContent = textarea.value;
+            }
+        });
+    }
+
+    const printButton = document.querySelector("[data-print-sbar]");
+    if (printButton) {
+        printButton.addEventListener("click", function () {
+            expandTableForPrint();
+            window.print();
+        });
+    }
+
+    window.addEventListener("beforeprint", expandTableForPrint);
+
+    const collapsedNotesKey = "collapsed-notes";
+    let collapsedNotes = new Set();
+
+    try {
+        const storedCollapsedNotes = JSON.parse(window.localStorage.getItem(collapsedNotesKey) || "[]");
+        if (Array.isArray(storedCollapsedNotes)) {
+            collapsedNotes = new Set(storedCollapsedNotes.map(String));
+        }
+    } catch (_error) {
+        collapsedNotes = new Set();
+    }
+
+    function syncCollapsedNotes() {
+        window.localStorage.setItem(collapsedNotesKey, JSON.stringify(Array.from(collapsedNotes)));
+    }
+
+    document.querySelectorAll("[data-note-collapsible]").forEach(function (noteCard) {
+        const noteId = noteCard.getAttribute("data-note-id");
+        const toggle = noteCard.closest(".note-item")?.querySelector("[data-note-toggle]");
+        const preview = noteCard.querySelector("[data-note-preview]");
+        const body = noteCard.querySelector("[data-note-body]");
+        if (!noteId || !toggle || !preview || !body) return;
+
+        function applyCollapsedState(isCollapsed) {
+            noteCard.classList.toggle("is-collapsed", isCollapsed);
+            body.hidden = isCollapsed;
+            preview.hidden = !isCollapsed;
+            toggle.setAttribute("aria-expanded", String(!isCollapsed));
+        }
+
+        applyCollapsedState(collapsedNotes.has(noteId));
+
+        toggle.addEventListener("click", function () {
+            const willCollapse = !noteCard.classList.contains("is-collapsed");
+            if (willCollapse) {
+                collapsedNotes.add(noteId);
+            } else {
+                collapsedNotes.delete(noteId);
+            }
+            applyCollapsedState(willCollapse);
+            syncCollapsedNotes();
+        });
+
+        preview.addEventListener("click", function () {
+            collapsedNotes.delete(noteId);
+            applyCollapsedState(false);
+            syncCollapsedNotes();
+        });
     });
 });
 </script>

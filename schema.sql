@@ -23,3 +23,10 @@ CREATE TABLE IF NOT EXISTS note_review_usage (
     request_count INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (note_id, usage_date)
 );
+
+CREATE TABLE IF NOT EXISTS user_saved_sbar (
+    user_id BIGINT PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+    selected_note_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    rows JSONB NOT NULL DEFAULT '[]'::jsonb,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

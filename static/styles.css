@@ -79,6 +79,32 @@ body {
     gap: 1.25rem;
 }
 
+.workspace-tabs {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.workspace-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0.75rem 1rem;
+    border-radius: 999px;
+    text-decoration: none;
+    color: var(--accent-dark);
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.14);
+    font-weight: 700;
+}
+
+.workspace-tab.is-active {
+    background: linear-gradient(135deg, var(--accent) 0%, #3b82f6 100%);
+    color: #eff6ff;
+    box-shadow: var(--shadow-soft);
+}
+
 .auth-layout {
     min-height: calc(100vh - 7rem);
     display: grid;
@@ -458,6 +484,11 @@ button:hover {
     gap: 1.25rem;
 }
 
+.workspace-sbar {
+    display: grid;
+    gap: 1.25rem;
+}
+
 .copilot-sidebar {
     display: grid;
     gap: 0.85rem;
@@ -472,6 +503,22 @@ button:hover {
     border: 1px solid var(--panel-border);
     border-radius: 20px;
     padding: 1.1rem 1.2rem;
+}
+
+.sbar-output-card {
+    background: var(--panel-strong);
+    border: 1px solid var(--panel-border);
+    border-radius: 20px;
+    padding: 1.1rem 1.2rem;
+    box-shadow: var(--shadow-soft);
+}
+
+.section-heading,
+.sbar-output-header {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 1rem;
 }
 
 .context-panel,
@@ -505,6 +552,10 @@ button:hover {
     max-height: 180px;
     overflow: auto;
     padding-right: 0.2rem;
+}
+
+.context-list-large {
+    max-height: 320px;
 }
 
 .context-item {
@@ -599,6 +650,67 @@ button:hover {
     margin: 0;
 }
 
+.table-scroll {
+    overflow-x: auto;
+}
+
+.sbar-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 920px;
+    margin-top: 0.5rem;
+}
+
+.sbar-table th,
+.sbar-table td {
+    padding: 0.9rem 0.95rem;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+    line-height: 1.55;
+}
+
+.sbar-table th {
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: #f8fbff;
+}
+
+.sbar-table tbody tr:nth-child(even) {
+    background: rgba(248, 251, 255, 0.8);
+}
+
+.table-textarea {
+    min-height: 130px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    padding: 0;
+    resize: vertical;
+    line-height: 1.55;
+    box-shadow: none;
+    overflow-y: hidden;
+}
+
+.table-textarea:focus {
+    background: #ffffff;
+    border: 0;
+    box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.14);
+}
+
+.table-print-text {
+    display: none;
+    white-space: pre-wrap;
+    line-height: 1.55;
+    color: #111827;
+}
+
+.no-print {
+    display: flex;
+}
+
 .ghost-button {
     background: transparent;
     color: var(--accent-dark);
@@ -646,11 +758,65 @@ button:hover {
     margin-top: 0.2rem;
 }
 
+.note-collapsible {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.note-meta-toggle {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--muted);
+    box-shadow: none;
+    cursor: pointer;
+}
+
+.note-meta-toggle:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.note-preview {
+    width: 100%;
+    display: block;
+    text-align: left;
+    padding: 0.9rem 1rem;
+    border-radius: 14px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: #f8fbff;
+    color: var(--muted);
+    box-shadow: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.note-preview:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.note-body {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.note-collapsible.is-collapsed {
+    gap: 0.65rem;
+}
+
 .note-content {
     white-space: pre-wrap;
     font-size: 1rem;
     line-height: 1.65;
-    margin-bottom: 1rem;
+    margin: 0;
 }
 
 .ghost-link {
@@ -704,6 +870,8 @@ button:hover {
 
     .auth-layout,
     .workspace-grid,
+    .section-heading,
+    .sbar-output-header,
     .notes-header,
     .note-meta,
     .context-header {
@@ -718,5 +886,64 @@ button:hover {
     .motion-sculpture {
         height: 190px;
         margin-top: 1.35rem;
+    }
+}
+
+@media print {
+    body {
+        background: #ffffff;
+    }
+
+    .bg-orb,
+    .flash-stack,
+    .notes-header,
+    .workspace-tabs,
+    .composer-card,
+    .copilot-sidebar,
+    .no-print {
+        display: none !important;
+    }
+
+    .page-shell,
+    .notes-card,
+    .workspace-sbar {
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background: #ffffff;
+        box-shadow: none;
+        border: 0;
+    }
+
+    .print-area,
+    .sbar-output-card {
+        display: block !important;
+        padding: 0;
+        border: 0;
+        box-shadow: none;
+        background: #ffffff;
+    }
+
+    .table-scroll {
+        overflow: visible;
+    }
+
+    .sbar-table {
+        min-width: 0;
+        font-size: 11px;
+    }
+
+    .sbar-table th,
+    .sbar-table td {
+        border-color: #d1d5db;
+        padding: 0.55rem;
+    }
+
+    .table-textarea {
+        display: none !important;
+    }
+
+    .table-print-text {
+        display: block !important;
     }
 }

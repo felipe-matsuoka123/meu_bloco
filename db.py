@@ -182,3 +182,38 @@ def increment_note_review_count(note_id: int, usage_date: date) -> None:
         (note_id, usage_date),
     )
     get_db().commit()
+
+
+def get_user_saved_sbar(user_id: int) -> dict[str, Any] | None:
+    return fetch_one(
+        """
+        SELECT selected_note_ids, rows, updated_at
+        FROM user_saved_sbar
+        WHERE user_id = %s
+        """,
+        (user_id,),
+    )
+
+
+def save_user_sbar(user_id: int, selected_note_ids: list[int], rows: list[dict[str, Any]]) -> None:
+    execute(
+        """
+        INSERT INTO user_saved_sbar (user_id, selected_note_ids, rows, updated_at)
+        VALUES (%s, %s::jsonb, %s::jsonb, CURRENT_TIMESTAMP)
+        ON CONFLICT (user_id)
+        DO UPDATE SET
+            selected_note_ids = EXCLUDED.selected_note_ids,
+            rows = EXCLUDED.rows,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (user_id, psycopg.types.json.Jsonb(selected_note_ids), psycopg.types.json.Jsonb(rows)),
+    )
+    get_db().commit()
+
+
+def delete_user_sbar(user_id: int) -> None:
+    execute(
+        "DELETE FROM user_saved_sbar WHERE user_id = %s",
+        (user_id,),
+    )
+    get_db().commit()
