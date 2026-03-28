@@ -10,9 +10,25 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS notes (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    title TEXT NOT NULL DEFAULT 'Sem título',
+    review_output TEXT NOT NULL DEFAULT '',
     content TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE notes
+ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT 'Sem título';
+
+ALTER TABLE notes
+ADD COLUMN IF NOT EXISTS review_output TEXT NOT NULL DEFAULT '';
+
+UPDATE notes
+SET title = 'Sem título'
+WHERE title IS NULL OR BTRIM(title) = '';
+
+UPDATE notes
+SET review_output = ''
+WHERE review_output IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_notes_user_id_created_at
 ON notes (user_id, created_at DESC, id DESC);

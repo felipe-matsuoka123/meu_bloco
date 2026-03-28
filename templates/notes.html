@@ -20,7 +20,7 @@
 
     <nav class="workspace-tabs" aria-label="Seções do painel">
         <a href="{{ url_for('notes', tab='notes') }}" class="workspace-tab {% if active_tab == 'notes' %}is-active{% endif %}">Anotações</a>
-        <a href="{{ url_for('notes', tab='sbar') }}" class="workspace-tab {% if active_tab == 'sbar' %}is-active{% endif %}">Tabela SBAR</a>
+        <a href="{{ url_for('notes', tab='sbar') }}" class="workspace-tab {% if active_tab == 'sbar' %}is-active{% endif %}">Passagem</a>
     </nav>
 
     {% if active_tab == "sbar" %}
@@ -29,12 +29,12 @@
                 <div class="section-heading">
                     <div>
                         <p class="eyebrow">Passagem de caso</p>
-                        <h2>Gerar tabela SBAR</h2>
+                        <h2>Gerar tabela de passagem</h2>
                     </div>
-                    <p class="muted">Selecione as anotações que devem virar linhas da tabela. O Gemini gera o texto de Situação, Background, Avaliação e Recomendação para cada uma.</p>
+                    <p class="muted">Selecione as anotações que devem virar linhas da tabela. O Gemini gera apenas HD, Status hoje, Riscos / Pendências e Plano. O campo Paciente deve ser preenchido manualmente, pois dados de identificação geralmente não estão no texto e isso ajuda a preservar a anonimização.</p>
                 </div>
 
-                <form method="post" class="stack" data-loading-form>
+                <form method="post" class="stack" data-loading-form data-generate-sbar-form>
                     <input type="hidden" name="form_name" value="generate_sbar">
                     <input type="hidden" name="active_tab" value="sbar">
 
@@ -57,7 +57,7 @@
                                         {% if note['id'] in selected_sbar_note_ids %}checked{% endif %}
                                     >
                                     <span>
-                                        <strong>Anotação #{{ note["id"] }}</strong>
+                                        <strong>{{ note["title"] or "Sem título" }}</strong>
                                         <small>{{ note["created_at"] }}</small>
                                     </span>
                                 </label>
@@ -67,13 +67,14 @@
 
                     <div class="assistant-actions">
                         <button type="submit" class="loading-button" data-loading-button>
-                            <span class="button-label">Gerar tabela SBAR</span>
+                            <span class="button-label">Gerar tabela</span>
                             <span class="button-loading" aria-hidden="true">
                                 <span class="spinner"></span>
-                                Gerando tabela...
+                                <span data-loading-message>Gerando passagem...</span>
                             </span>
                         </button>
                     </div>
+                    <p class="muted loading-hint" data-generate-sbar-hint>O Gemini vai gerar uma linha por vez para reduzir mistura entre anotações.</p>
                 </form>
 
                 {% if sbar_output %}
@@ -93,12 +94,12 @@
                     <div class="sbar-output-header">
                         <div>
                             <p class="eyebrow">Resultado</p>
-                            <h2>Tabela SBAR</h2>
+                            <h2>Tabela de Passagem</h2>
                         </div>
-                        <p class="muted">Uma linha por anotação selecionada. Você pode editar qualquer célula, salvar e reencontrar essa tabela depois do login.</p>
+                        <p class="muted">Preencha Paciente manualmente. O Gemini continua gerando apenas as 4 colunas clínicas para evitar inferir identificação e preservar a anonimização.</p>
                     </div>
 
-                    <form method="post" class="stack">
+                    <form method="post" class="stack" data-autosave-sbar-form data-autosave-url="{{ url_for('autosave_sbar') }}">
                         <input type="hidden" name="form_name" value="save_sbar">
                         <input type="hidden" name="active_tab" value="sbar">
 
@@ -106,11 +107,11 @@
                             <table class="sbar-table">
                                 <thead>
                                     <tr>
-                                        <th>Anotação</th>
-                                        <th>Situação</th>
-                                        <th>Background</th>
-                                        <th>Avaliação</th>
-                                        <th>Recomendação</th>
+                                        <th>Paciente</th>
+                                        <th>HD</th>
+                                        <th>Status Hoje</th>
+                                        <th>Riscos / Pendências</th>
+                                        <th>Plano</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -118,22 +119,23 @@
                                         <tr>
                                             <td>
                                                 <input type="hidden" name="sbar_note_id" value="{{ row['note_id'] }}">
-                                                <strong>#{{ row["note_id"] }}</strong>
-                                            </td>
-                                            <td>
-                                                <textarea name="sbar_situacao" rows="6" class="table-textarea">{{ row["situacao"] }}</textarea>
+                                                <textarea name="sbar_paciente" rows="4" class="table-textarea" data-sbar-field="paciente" placeholder="ID: Preencha nome, idade, leito, ...">{{ row["paciente"] }}</textarea>
                                                 <div class="table-print-text" aria-hidden="true"></div>
                                             </td>
                                             <td>
-                                                <textarea name="sbar_background" rows="6" class="table-textarea">{{ row["background"] }}</textarea>
+                                                <textarea name="sbar_hd" rows="6" class="table-textarea" data-sbar-field="hd">{{ row["hd"] }}</textarea>
                                                 <div class="table-print-text" aria-hidden="true"></div>
                                             </td>
                                             <td>
-                                                <textarea name="sbar_avaliacao" rows="6" class="table-textarea">{{ row["avaliacao"] }}</textarea>
+                                                <textarea name="sbar_status_hoje" rows="6" class="table-textarea" data-sbar-field="status_hoje">{{ row["status_hoje"] }}</textarea>
                                                 <div class="table-print-text" aria-hidden="true"></div>
                                             </td>
                                             <td>
-                                                <textarea name="sbar_recomendacao" rows="6" class="table-textarea">{{ row["recomendacao"] }}</textarea>
+                                                <textarea name="sbar_riscos_pendencias" rows="6" class="table-textarea" data-sbar-field="riscos_pendencias">{{ row["riscos_pendencias"] }}</textarea>
+                                                <div class="table-print-text" aria-hidden="true"></div>
+                                            </td>
+                                            <td>
+                                                <textarea name="sbar_plano" rows="6" class="table-textarea" data-sbar-field="plano">{{ row["plano"] }}</textarea>
                                                 <div class="table-print-text" aria-hidden="true"></div>
                                             </td>
                                         </tr>
@@ -145,6 +147,7 @@
                         <div class="assistant-actions no-print">
                             <button type="submit">Salvar tabela</button>
                         </div>
+                        <p class="autosave-status muted no-print" data-autosave-status aria-live="polite"></p>
                     </form>
                 </section>
             {% elif notes %}
@@ -153,7 +156,7 @@
                 </section>
             {% else %}
                 <section class="empty-state">
-                    Nenhuma anotação ainda. Crie anotações primeiro para montar a tabela SBAR.
+                    Nenhuma anotação ainda. Crie anotações primeiro para montar a tabela de passagem.
                 </section>
             {% endif %}
         </section>
@@ -163,6 +166,10 @@
                 <form method="post" class="stack composer-card">
                     <input type="hidden" name="form_name" value="note">
                     <input type="hidden" name="active_tab" value="notes">
+                    <label class="field">
+                        <span>Título</span>
+                        <input type="text" name="title" placeholder="Ex: Pós-operatório UTI 12" required>
+                    </label>
                     <label class="field">
                         <span>Nova anotação</span>
                         <textarea name="content" rows="6" placeholder="Escreva sua evolução clínica aqui ..." required></textarea>
@@ -174,48 +181,54 @@
                     {% if notes %}
                         {% for note in notes %}
                             <article class="note-item">
-                                <button
-                                    type="button"
-                                    class="note-meta note-meta-toggle"
-                                    data-note-toggle
-                                    aria-expanded="true"
+                                <form method="post" action="{{ url_for('delete_note', note_id=note['id']) }}" id="delete-note-{{ note['id'] }}"></form>
+                                <form
+                                    method="post"
+                                    action="{{ url_for('edit_note', note_id=note['id']) }}"
+                                    class="stack note-edit-form"
+                                    data-autosave-note-form
+                                    data-autosave-url="{{ url_for('autosave_note', note_id=note['id']) }}"
+                                    data-note-editor
+                                    data-note-id="{{ note['id'] }}"
                                 >
-                                    <span>Anotação #{{ note["id"] }}</span>
-                                    <span>{{ note["created_at"] }}</span>
-                                </button>
-                                {% if note['id'] == editing_note_id %}
-                                    <form method="post" action="{{ url_for('edit_note', note_id=note['id']) }}" class="stack note-edit-form">
-                                        <label class="field">
-                                            <span>Editar anotação</span>
-                                            <textarea name="content" rows="7" required>{{ note["content"] }}</textarea>
-                                        </label>
-                                        <div class="note-actions">
-                                            <button type="submit">Salvar alterações</button>
-                                            <a href="{{ url_for('notes', tab='notes') }}" class="ghost-link">Cancelar</a>
-                                        </div>
-                                    </form>
-                                {% else %}
-                                    <div class="note-collapsible" data-note-collapsible data-note-id="{{ note['id'] }}">
-                                        <button
-                                            type="button"
-                                            class="note-preview"
-                                            data-note-preview
-                                            hidden
-                                        >
-                                            {{ note["content"]|replace('\n', ' ') }}
-                                        </button>
-                                        <div class="note-body" data-note-body>
-                                            <p class="note-content">{{ note["content"] }}</p>
-                                            <div class="note-actions">
-                                                <a href="{{ url_for('notes', edit=note['id'], tab='notes') }}" class="ghost-link">Editar</a>
-                                                <a href="{{ url_for('download_note_pdf', note_id=note['id']) }}" class="ghost-link">Baixar PDF</a>
-                                                <form method="post" action="{{ url_for('delete_note', note_id=note['id']) }}">
-                                                    <button type="submit" class="danger-button">Excluir</button>
-                                                </form>
-                                            </div>
-                                        </div>
+                                    <div class="note-header-row">
+                                        <input type="text" name="title" class="note-title-input" value="{{ note['title'] or 'Sem título' }}" placeholder="Título da anotação" required data-autosave-note-title>
+                                        <span class="note-header-actions">
+                                            <button
+                                                type="button"
+                                                class="ghost-button"
+                                                data-review-note-button
+                                                data-review-url="{{ url_for('review_note', note_id=note['id']) }}"
+                                                data-note-title="{{ note['title'] or 'Sem título' }}"
+                                            >
+                                                Revisar
+                                            </button>
+                                            <a href="{{ url_for('download_note_pdf', note_id=note['id']) }}" class="ghost-link">Baixar PDF</a>
+                                            <button type="submit" class="danger-button" form="delete-note-{{ note['id'] }}">Excluir</button>
+                                            <button type="button" class="ghost-button note-collapse-toggle" data-note-collapse-toggle aria-expanded="true">
+                                                Minimizar
+                                            </button>
+                                        </span>
                                     </div>
-                                {% endif %}
+                                    <label class="field note-field">
+                                        <span>Conteúdo</span>
+                                        <textarea name="content" rows="9" class="note-textarea" required data-autosave-note-input>{{ note["content"] }}</textarea>
+                                    </label>
+                                    <section class="note-review-box" data-note-review-box data-has-review="{% if note['review_output'] %}true{% else %}false{% endif %}" {% if not note['review_output'] %}hidden{% endif %}>
+                                        <div class="note-review-header">
+                                            <div>
+                                                <p class="eyebrow">Analise</p>
+                                                <h3>Revisão clínica</h3>
+                                            </div>
+                                            <p class="muted" data-note-review-meta></p>
+                                        </div>
+                                        <label class="field">
+                                            <span>Saída do modelo</span>
+                                            <textarea name="review_output" rows="8" class="note-review-textarea" data-note-review-output placeholder="A revisão clínica vai aparecer aqui." readonly>{{ note["review_output"] }}</textarea>
+                                        </label>
+                                    </section>
+                                    <p class="autosave-status muted" data-autosave-status aria-live="polite"></p>
+                                </form>
                             </article>
                         {% endfor %}
                     {% else %}
@@ -223,64 +236,6 @@
                     {% endif %}
                 </section>
             </section>
-
-            <aside class="copilot-sidebar">
-                <section class="assistant-card">
-                    <form method="post" class="stack review-form" data-loading-form>
-                        <input type="hidden" name="form_name" value="review">
-                        <input type="hidden" name="active_tab" value="notes">
-                        <section class="context-panel">
-                            <div class="context-header">
-                                <div>
-                                    <p class="eyebrow">Contexto</p>
-                                    <h3>Selecionadas</h3>
-                                </div>
-                                <span class="context-counter">{% if selected_note_id %}1 selecionada{% else %}0 selecionadas{% endif %}</span>
-                            </div>
-
-                            <div class="context-list">
-                                {% for note in notes %}
-                                    <label class="context-item">
-                                        <input
-                                            type="radio"
-                                            name="selected_note_id"
-                                            value="{{ note['id'] }}"
-                                            {% if note['id'] == selected_note_id %}checked{% endif %}
-                                        >
-                                        <span>
-                                            <strong>Anotação #{{ note["id"] }}</strong>
-                                            <small>{{ review_counts[note["id"]] }}/4 hoje</small>
-                                        </span>
-                                    </label>
-                                {% endfor %}
-                            </div>
-                        </section>
-
-                        <div class="assistant-actions">
-                            <button type="submit" class="loading-button" data-loading-button>
-                                <span class="button-label">Revisar historico</span>
-                                <span class="button-loading" aria-hidden="true">
-                                    <span class="spinner"></span>
-                                    Gerando analise...
-                                </span>
-                            </button>
-                        </div>
-                        <p class="review-help muted">Usando IA, gere uma revisão curta com os principais pontos pouco claros, faltantes ou em aberto.</p>
-                    </form>
-
-                    {% if review_output %}
-                        <section class="review-panel">
-                            <p class="eyebrow">Analise</p>
-                            <div class="review-output">{{ review_output }}</div>
-                        </section>
-                        <form method="post" class="inline-form">
-                            <input type="hidden" name="form_name" value="clear_review">
-                            <input type="hidden" name="active_tab" value="notes">
-                            <button type="submit" class="ghost-button">Limpar analise</button>
-                        </form>
-                    {% endif %}
-                </section>
-            </aside>
         </section>
     {% endif %}
 </section>
@@ -289,9 +244,41 @@
 {% block scripts %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+    const collapsedNotesKey = "minimized-note-editors";
+
+    function setAutosaveStatus(target, message, state) {
+        if (!target) return;
+        target.textContent = message;
+        target.dataset.state = state || "";
+    }
+
+    function debounce(callback, wait) {
+        let timeoutId = null;
+        return function () {
+            const args = arguments;
+            clearTimeout(timeoutId);
+            timeoutId = window.setTimeout(function () {
+                callback.apply(null, args);
+            }, wait);
+        };
+    }
+
     function autosizeTextarea(textarea) {
         textarea.style.height = "auto";
         textarea.style.height = textarea.scrollHeight + "px";
+    }
+
+    function loadCollapsedNotes() {
+        try {
+            const parsed = JSON.parse(window.localStorage.getItem(collapsedNotesKey) || "[]");
+            return Array.isArray(parsed) ? new Set(parsed.map(String)) : new Set();
+        } catch (_error) {
+            return new Set();
+        }
+    }
+
+    function saveCollapsedNotes(collapsedNotes) {
+        window.localStorage.setItem(collapsedNotesKey, JSON.stringify(Array.from(collapsedNotes)));
     }
 
     document.querySelectorAll("[data-loading-form]").forEach(function (form) {
@@ -302,6 +289,42 @@ document.addEventListener("DOMContentLoaded", function () {
             button.classList.add("is-loading");
         });
     });
+
+    const generateSbarForm = document.querySelector("[data-generate-sbar-form]");
+    if (generateSbarForm) {
+        const selectedCountLabel = generateSbarForm.querySelector(".context-counter");
+        const loadingMessage = generateSbarForm.querySelector("[data-loading-message]");
+        const hint = generateSbarForm.querySelector("[data-generate-sbar-hint]");
+        const checkboxes = Array.from(generateSbarForm.querySelectorAll('input[name="selected_note_ids"]'));
+
+        function updateGenerateSbarState() {
+            const selectedCount = checkboxes.filter(function (checkbox) {
+                return checkbox.checked;
+            }).length;
+
+            if (selectedCountLabel) {
+                selectedCountLabel.textContent = selectedCount + (selectedCount === 1 ? " selecionada" : " selecionadas");
+            }
+
+            if (loadingMessage) {
+                loadingMessage.textContent = selectedCount > 0
+                    ? "Gerando " + selectedCount + (selectedCount === 1 ? " linha..." : " linhas...")
+                    : "Gerando passagem...";
+            }
+
+            if (hint) {
+                hint.textContent = selectedCount > 1
+                    ? "O Gemini vai gerar " + selectedCount + " linhas separadamente para reduzir mistura entre anotações."
+                    : "O Gemini vai gerar uma linha por vez para reduzir mistura entre anotações.";
+            }
+        }
+
+        checkboxes.forEach(function (checkbox) {
+            checkbox.addEventListener("change", updateGenerateSbarState);
+        });
+
+        updateGenerateSbarState();
+    }
 
     const tableTextareas = document.querySelectorAll(".table-textarea");
     tableTextareas.forEach(function (textarea) {
@@ -340,55 +363,248 @@ document.addEventListener("DOMContentLoaded", function () {
 
     window.addEventListener("beforeprint", expandTableForPrint);
 
-    const collapsedNotesKey = "collapsed-notes";
-    let collapsedNotes = new Set();
+    document.querySelectorAll("[data-review-note-button]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            const reviewUrl = button.getAttribute("data-review-url");
+            const form = button.closest("[data-note-editor]");
+            const autosaveUrl = form?.getAttribute("data-autosave-url");
+            const titleInput = form?.querySelector("[data-autosave-note-title]");
+            const noteInput = form?.querySelector("[data-autosave-note-input]");
+            const autosaveStatus = form?.querySelector("[data-autosave-status]");
+            const reviewBox = form?.querySelector("[data-note-review-box]");
+            const reviewMeta = form?.querySelector("[data-note-review-meta]");
+            const reviewOutput = form?.querySelector("[data-note-review-output]");
+            if (!reviewUrl || !form || !autosaveUrl || !titleInput || !noteInput || !autosaveStatus || !reviewBox || !reviewMeta || !reviewOutput) return;
 
-    try {
-        const storedCollapsedNotes = JSON.parse(window.localStorage.getItem(collapsedNotesKey) || "[]");
-        if (Array.isArray(storedCollapsedNotes)) {
-            collapsedNotes = new Set(storedCollapsedNotes.map(String));
-        }
-    } catch (_error) {
-        collapsedNotes = new Set();
-    }
+            reviewBox.dataset.hasReview = "true";
+            reviewBox.hidden = form.classList.contains("is-collapsed");
+            reviewMeta.textContent = "Gerando analise da anotacao selecionada...";
+            reviewOutput.value = "Carregando...";
+            autosizeTextarea(reviewOutput);
+            button.disabled = true;
 
-    function syncCollapsedNotes() {
-        window.localStorage.setItem(collapsedNotesKey, JSON.stringify(Array.from(collapsedNotes)));
-    }
+            fetch(reviewUrl, { method: "POST" })
+                .then(async function (response) {
+                    const payload = await response.json().catch(function () {
+                        return {};
+                    });
+                    if (!response.ok || !payload.ok) {
+                        throw new Error(payload.error || "Nao foi possivel consultar o Gemini.");
+                    }
+                    reviewMeta.textContent = (payload.review_count || 0) + "/4 analises hoje";
+                    reviewOutput.value = payload.review_output || "Nenhum texto retornado.";
+                    reviewBox.dataset.hasReview = reviewOutput.value.trim() ? "true" : "false";
+                    autosizeTextarea(reviewOutput);
 
-    document.querySelectorAll("[data-note-collapsible]").forEach(function (noteCard) {
-        const noteId = noteCard.getAttribute("data-note-id");
-        const toggle = noteCard.closest(".note-item")?.querySelector("[data-note-toggle]");
-        const preview = noteCard.querySelector("[data-note-preview]");
-        const body = noteCard.querySelector("[data-note-body]");
-        if (!noteId || !toggle || !preview || !body) return;
+                    setAutosaveStatus(autosaveStatus, "Salvando analise...", "saving");
+                    return fetch(autosaveUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            title: titleInput.value,
+                            review_output: reviewOutput.value,
+                            content: noteInput.value,
+                        }),
+                    }).then(async function (saveResponse) {
+                        const savePayload = await saveResponse.json().catch(function () {
+                            return {};
+                        });
+                        if (!saveResponse.ok) {
+                            throw new Error(savePayload.error || "Nao foi possivel salvar a analise.");
+                        }
+                        setAutosaveStatus(autosaveStatus, "Analise salva automaticamente.", "saved");
+                    });
+                })
+                .catch(function (error) {
+                    reviewMeta.textContent = "Falha ao gerar analise";
+                    reviewOutput.value = error.message;
+                    reviewBox.dataset.hasReview = reviewOutput.value.trim() ? "true" : "false";
+                    autosizeTextarea(reviewOutput);
+                    setAutosaveStatus(autosaveStatus, error.message, "error");
+                })
+                .finally(function () {
+                    button.disabled = false;
+                });
+        });
+    });
+
+    const collapsedNotes = loadCollapsedNotes();
+
+    document.querySelectorAll("[data-autosave-note-form]").forEach(function (form) {
+        const titleInput = form.querySelector("[data-autosave-note-title]");
+        const input = form.querySelector("[data-autosave-note-input]");
+        const reviewBox = form.querySelector("[data-note-review-box]");
+        const reviewOutput = form.querySelector("[data-note-review-output]");
+        const status = form.querySelector("[data-autosave-status]");
+        const autosaveUrl = form.getAttribute("data-autosave-url");
+        const toggle = form.querySelector("[data-note-collapse-toggle]");
+        const noteId = form.getAttribute("data-note-id");
+        if (!titleInput || !input || !status || !autosaveUrl || !toggle || !noteId) return;
 
         function applyCollapsedState(isCollapsed) {
-            noteCard.classList.toggle("is-collapsed", isCollapsed);
-            body.hidden = isCollapsed;
-            preview.hidden = !isCollapsed;
+            form.classList.toggle("is-collapsed", isCollapsed);
+            toggle.textContent = isCollapsed ? "Expandir" : "Minimizar";
             toggle.setAttribute("aria-expanded", String(!isCollapsed));
+            if (isCollapsed) {
+                input.style.height = "72px";
+                if (reviewBox) {
+                    reviewBox.hidden = true;
+                }
+            } else {
+                autosizeTextarea(input);
+                if (reviewBox && reviewBox.dataset.hasReview === "true") {
+                    reviewBox.hidden = false;
+                }
+            }
         }
 
         applyCollapsedState(collapsedNotes.has(noteId));
 
+        let lastSavedSnapshot = JSON.stringify({
+            title: titleInput.value,
+            content: input.value,
+        });
+        let requestCounter = 0;
+
+        const autosave = debounce(function () {
+            const nextSnapshot = JSON.stringify({
+                title: titleInput.value,
+                content: input.value,
+            });
+            if (nextSnapshot === lastSavedSnapshot) return;
+
+            requestCounter += 1;
+            const requestId = requestCounter;
+            setAutosaveStatus(status, "Salvando...", "saving");
+
+            fetch(autosaveUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    title: titleInput.value,
+                    review_output: reviewOutput ? reviewOutput.value : "",
+                    content: input.value,
+                }),
+            })
+                .then(async function (response) {
+                    const payload = await response.json().catch(function () {
+                        return {};
+                    });
+                    if (!response.ok) {
+                        throw new Error(payload.error || "Nao foi possivel salvar a anotacao.");
+                    }
+                    if (requestId !== requestCounter) return;
+                    lastSavedSnapshot = nextSnapshot;
+                    setAutosaveStatus(status, "Salvo automaticamente.", "saved");
+                })
+                .catch(function (error) {
+                    if (requestId !== requestCounter) return;
+                    setAutosaveStatus(status, error.message, "error");
+                });
+        }, 700);
+
+        function queueAutosave() {
+            if (form.classList.contains("is-collapsed")) {
+                input.style.height = "72px";
+            } else {
+                autosizeTextarea(input);
+            }
+            setAutosaveStatus(status, "Alteracoes nao salvas.", "dirty");
+            autosave();
+        }
+
+        titleInput.addEventListener("input", queueAutosave);
+        input.addEventListener("input", queueAutosave);
+
         toggle.addEventListener("click", function () {
-            const willCollapse = !noteCard.classList.contains("is-collapsed");
-            if (willCollapse) {
+            const isCollapsed = !form.classList.contains("is-collapsed");
+            if (isCollapsed) {
                 collapsedNotes.add(noteId);
             } else {
                 collapsedNotes.delete(noteId);
             }
-            applyCollapsedState(willCollapse);
-            syncCollapsedNotes();
-        });
-
-        preview.addEventListener("click", function () {
-            collapsedNotes.delete(noteId);
-            applyCollapsedState(false);
-            syncCollapsedNotes();
+            applyCollapsedState(isCollapsed);
+            saveCollapsedNotes(collapsedNotes);
         });
     });
+
+    const sbarForm = document.querySelector("[data-autosave-sbar-form]");
+    if (sbarForm) {
+        const status = sbarForm.querySelector("[data-autosave-status]");
+        const autosaveUrl = sbarForm.getAttribute("data-autosave-url");
+        const noteIdInputs = Array.from(sbarForm.querySelectorAll('input[name="sbar_note_id"]'));
+        if (status && autosaveUrl && noteIdInputs.length) {
+            let lastSavedSnapshot = "";
+            let requestCounter = 0;
+
+            function getSbarSnapshot() {
+                const rows = noteIdInputs.map(function (noteIdInput) {
+                    const row = noteIdInput.closest("tr");
+                    return {
+                        note_id: Number(noteIdInput.value),
+                        paciente: row.querySelector('[data-sbar-field="paciente"]').value,
+                        hd: row.querySelector('[data-sbar-field="hd"]').value,
+                        status_hoje: row.querySelector('[data-sbar-field="status_hoje"]').value,
+                        riscos_pendencias: row.querySelector('[data-sbar-field="riscos_pendencias"]').value,
+                        plano: row.querySelector('[data-sbar-field="plano"]').value,
+                    };
+                });
+
+                return {
+                    selected_note_ids: rows.map(function (row) {
+                        return row.note_id;
+                    }),
+                    rows: rows,
+                };
+            }
+
+            lastSavedSnapshot = JSON.stringify(getSbarSnapshot());
+
+            const autosaveSbar = debounce(function () {
+                const snapshot = getSbarSnapshot();
+                const snapshotKey = JSON.stringify(snapshot);
+                if (snapshotKey === lastSavedSnapshot) return;
+
+                requestCounter += 1;
+                const requestId = requestCounter;
+                setAutosaveStatus(status, "Salvando...", "saving");
+
+                fetch(autosaveUrl, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(snapshot),
+                })
+                    .then(async function (response) {
+                        const payload = await response.json().catch(function () {
+                            return {};
+                        });
+                        if (!response.ok) {
+                            throw new Error(payload.error || "Nao foi possivel salvar a tabela SBAR.");
+                        }
+                        if (requestId !== requestCounter) return;
+                        lastSavedSnapshot = snapshotKey;
+                        setAutosaveStatus(status, "Tabela salva automaticamente.", "saved");
+                    })
+                    .catch(function (error) {
+                        if (requestId !== requestCounter) return;
+                        setAutosaveStatus(status, error.message, "error");
+                    });
+            }, 700);
+
+            sbarForm.querySelectorAll(".table-textarea").forEach(function (textarea) {
+                textarea.addEventListener("input", function () {
+                    setAutosaveStatus(status, "Alteracoes nao salvas.", "dirty");
+                    autosaveSbar();
+                });
+            });
+        }
+    }
 });
 </script>
 {% endblock %}

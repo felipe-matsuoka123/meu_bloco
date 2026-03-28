@@ -34,7 +34,8 @@ app.config["DATABASE_URL"] = os.environ.get(
     "DATABASE_URL",
     "postgresql://postgres:postgres@localhost:5432/meu_bloco",
 )
-app.config["GEMINI_MODEL"] = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+app.config["GEMINI_MODEL"] = os.environ.get("GEMINI_MODEL", "gemini-3-flash-preview")
+app.config["GEMINI_TEMPERATURE"] = float(os.environ.get("GEMINI_TEMPERATURE", "0.0"))
 app.config["MAX_LOGIN_ATTEMPTS"] = 5
 app.config["LOGIN_LOCKOUT_MINUTES"] = 15
 app.config["STRIPE_SECRET_KEY"] = os.environ.get("STRIPE_SECRET_KEY", "")
@@ -186,10 +187,11 @@ def get_saved_sbar(user_id: int) -> tuple[list[int], list[dict[str, str | int]] 
         rows.append(
             {
                 "note_id": note_id,
-                "situacao": clean_assistant_text(str(item.get("situacao", "Nao informado."))) or "Nao informado.",
-                "background": clean_assistant_text(str(item.get("background", "Nao informado."))) or "Nao informado.",
-                "avaliacao": clean_assistant_text(str(item.get("avaliacao", "Nao informado."))) or "Nao informado.",
-                "recomendacao": clean_assistant_text(str(item.get("recomendacao", "Nao informado."))) or "Nao informado.",
+                "paciente": clean_assistant_text(str(item.get("paciente", ""))),
+                "hd": clean_assistant_text(str(item.get("hd", "Nao informado."))) or "Nao informado.",
+                "status_hoje": clean_assistant_text(str(item.get("status_hoje", "Nao informado."))) or "Nao informado.",
+                "riscos_pendencias": clean_assistant_text(str(item.get("riscos_pendencias", "Nao informado."))) or "Nao informado.",
+                "plano": clean_assistant_text(str(item.get("plano", "Nao informado."))) or "Nao informado.",
             }
         )
 
@@ -215,7 +217,8 @@ def build_notes_context(notes_list: list[dict]) -> str:
     formatted_notes = []
     for note in notes_list:
         safe_content, _ = redact_note_content(note["content"])
-        formatted_notes.append(f'Anotacao #{note["id"]}: {safe_content}')
+        title = clean_assistant_text(str(note.get("title", "Sem título"))) or "Sem título"
+        formatted_notes.append(f'Titulo: {title}\nAnotacao #{note["id"]}: {safe_content}')
     return "\n".join(formatted_notes)
 
 
@@ -230,25 +233,58 @@ def ask_gemini_for_medical_review(notes_list: list[dict]) -> str:
     client = genai.Client(api_key=api_key)
     notes_context = build_notes_context(notes_list)
     prompt = f"""
-Voce e um medico experiente revisando o historico clinico de um paciente.
+Voce e um medico experiente revisando evolucoes clinicas.
+
 Analise apenas as anotacoes fornecidas.
+
 Escreva em portugues do Brasil.
 Seja direto, objetivo e pratico.
-Nao use markdown, negrito, tabelas ou introducoes longas.
-Nao invente fatos ausentes.
-Nao use data, horario de criacao ou ordem das anotacoes para inferir linha do tempo.
-Considere apenas o conteudo textual de cada anotacao.
-As partes marcadas como [REMOVIDO] sao resultado de anonimização e nao devem ser tratadas como problema do texto.
-Nao comente sobre [REMOVIDO], nao liste isso como falha e nao faca perguntas por causa dessas marcacoes.
-Quando algo estiver faltando, diga explicitamente o que falta e por que importa.
-Quando houver mencao a avaliacao, exame, conduta ou diagnostico sem detalhes suficientes,
-aponte isso como pergunta em aberto (Ex: Voce verificou a evolucao da neurologia?, Verificou foi o resultado do exame comentado?, Por que a paciente esta com esse dispositivo (sonda, acesso diferente) ?).
-Seja efetivo: destaque apenas as deficiencias mais importantes.
-Ignore problemas menores de redacao que nao mudem a compreensao clinica.
-Prefira poucos itens, com maior impacto pratico.
-Mantenha a resposta curta. Use no maximo 3 itens por secao.
+Use frases curtas e linguagem simples.
 
-Organize a resposta exatamente nesta estrutura:
+REGRAS GERAIS:
+- Nao invente fatos ausentes
+- Nao inferir linha do tempo por ordem das anotacoes
+- Ignore [REMOVIDO]
+- Nao comentar sobre anonimização
+- Priorize impacto clinico real
+- Foque apenas no que muda conduta ou risco
+
+REGRAS DE OBJETIVIDADE:
+- Cada item deve ter no maximo 1 frase curta
+- Evite explicacoes fisiopatologicas
+- Evite detalhamento excessivo
+- Prefira: problema -> acao
+- Se puder simplificar, simplifique
+
+QUANDO IDENTIFICAR PROBLEMAS:
+- Liste apenas os mais relevantes (maximo 3 por secao)
+- Evite generalidades
+- Foque em falhas que impactam decisao
+
+INFORMACOES FALTANDO:
+- Diga exatamente o que falta
+- Use termos amplos quando possivel (ex: “avaliacao de anemia”)
+
+PERGUNTAS EM ABERTO:
+- Devem ser objetivas e acionaveis
+- Relacionadas a conduta, diagnostico ou risco
+
+SCORES:
+- Sugira apenas se claramente aplicaveis
+- Maximo 2 scores
+- Nao sugerir scores irrelevantes
+
+SUGESTAO DE ESTUDO:
+- Maximo 5 palavras
+- Tema geral e pratico
+- Nao detalhar
+
+REGRA FINAL:
+- A resposta deve ser lida em menos de 20 segundos
+- Se estiver longa, reduza pela metade mantendo o essencial
+
+Organize a resposta exatamente assim:
+
 Pontos para melhorar a clareza:
 - ...
 
@@ -258,7 +294,14 @@ Informacoes faltando:
 Perguntas em aberto:
 - ...
 
-Se nao houver itens em alguma secao, escreva "- Nenhum ponto relevante."
+Scores sugeridos:
+- ...
+
+Sugestao de estudo:
+- ...
+
+Se nao houver itens em alguma secao, escreva:
+- Nenhum ponto relevante.
 
 Anotacoes do usuario:
 {notes_context}
@@ -267,6 +310,7 @@ Anotacoes do usuario:
     response = client.models.generate_content(
         model=app.config["GEMINI_MODEL"],
         contents=prompt,
+        config={"temperature": app.config["GEMINI_TEMPERATURE"]},
     )
     text = getattr(response, "text", None)
     if not text:
@@ -284,6 +328,7 @@ def build_sbar_context(notes_list: list[dict]) -> str:
         formatted_notes.append(
             "\n".join(
                 [
+                    f"Titulo: {clean_assistant_text(str(note.get('title', 'Sem título'))) or 'Sem título'}",
                     f"Anotacao #{note['id']}",
                     f"Criado em: {note['created_at']}",
                     safe_content,
@@ -306,17 +351,19 @@ def extract_json_payload(text: str) -> str:
     raise RuntimeError("invalid_json")
 
 
-def ask_gemini_for_sbar_rows(notes_list: list[dict]) -> list[dict[str, str | int]]:
-    if genai is None:
-        raise RuntimeError("sdk_missing")
-
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("api_key_missing")
-
-    client = genai.Client(api_key=api_key)
+def build_sbar_prompt(notes_list: list[dict], current_date: str) -> str:
     prompt = f"""
-Voce e um medico organizando uma passagem de caso no formato SBAR.
+Voce e um medico organizando uma passagem de caso para plantao.
+
+A partir da evolucao clinica, extraia apenas informacoes relevantes para tomada de decisao.
+
+Data de hoje: {current_date}
+
+IMPORTANTE:
+O texto pode conter excesso de informacoes, multiplos exames e eventos ao longo do tempo.
+Sua tarefa e filtrar e organizar apenas o que impacta a conduta atual.
+Nao adicione nenhuma informacao que nao esteja escrita no prontuario original
+
 Analise apenas as anotacoes fornecidas.
 Escreva em portugues do Brasil.
 Retorne exatamente um JSON valido contendo uma lista.
@@ -325,28 +372,89 @@ Nao inclua markdown, explicacoes, comentarios ou texto fora do JSON.
 Use esta estrutura exata em cada item:
 {{
   "note_id": 123,
-  "situacao": "...",
-  "background": "...",
-  "avaliacao": "...",
-  "recomendacao": "..."
+  "hd": "...",
+  "status_hoje": "...",
+  "riscos_pendencias": "...",
+  "plano": "..."
 }}
 
-Regras:
-- Gere uma linha por anotacao.
-- Cada campo deve ser curto, clinico e util para passagem de caso.
-- Nao invente fatos ausentes.
-- Se faltar informacao para algum campo, escreva "Nao informado."
-- As partes marcadas como [REMOVIDO] sao anonimização e devem ser ignoradas.
-- Nao cite data de criacao como se fosse dado clinico.
-- Baseie cada linha apenas no conteudo da propria anotacao correspondente.
+Estruture a saida nos seguintes campos:
+
+HD:
+Status hoje:
+Riscos / Pendencias:
+Plano:
+
+DEFINICOES:
+
+HD:
+- Diagnostico principal
+- Complicacoes associadas relacionadas ao diagnóstico central
+- Contexto clinico essencial (ex: tempo de internacao, eventos relevantes)
+- Incluir temporalidade quando disponivel (ex: D5 de internacao, evento em 10/03)
+- NAO incluir exames detalhados ou lista extensa de achados
+
+Status hoje:
+- Estado atual do paciente (momento da avaliacao mais recente)
+- Exame Físico atual (focar nas alteracoes)
+- Nivel de consciencia, estabilidade hemodinamica e respiratoria
+- Medicacoes importantes em uso (ex: antibiotico com dia de tratamento, anticoagulacao, antiagregantes)
+- Incluir referencia temporal se relevante (ex: "hoje", "ultimas 24h")
+- NAO incluir dados normais sem impacto
+
+Riscos / Pendencias:
+- Problemas ainda nao resolvidos
+- Avaliacoes pendentes (ex: aguardando parecer)
+- Riscos reais de deterioracao
+- Incluir contexto temporal quando aplicavel (ex: "desde 21/03", "aguardando desde admissao")
+- Quando incluir exames, citar data
+
+Plano:
+- Condutas principais (resumidas)
+- Incluir acoes futuras relevantes (ex: na alta, apos avaliacao)
+- NAO listar conduta em formato extenso ou checklist
+
+REGRAS CRITICAS:
+- Nao repetir informacao entre campos!
+- NAO copiar a evolucao original
+- Resumir agressivamente
+- NAO listar exames irrelevantes ou antigos
+- Sempre priorizar informacao recente sobre antiga
+- Sempre explicitar estabilidade ou instabilidade do paciente
+- NAO inventar informacoes ausentes
+
+REGRAS DE TEMPORALIDADE (ESSENCIAL):
+- Sempre que houver datas, utilize-as para organizar o raciocinio clinico
+- Priorize eventos mais recentes
+- Diferencie claramente:
+  -> evento passado relevante
+  -> estado atual
+  -> plano futuro
+
+HEURISTICAS DE FILTRAGEM:
+- Priorize: risco > conduta > estado atual > historico
+- Ignore exames que nao mudam conduta atual
+- Se multiplos exames: usar apenas o que muda decisao
+- Conduta longa -> resumir em intencao clinica
+
+Antes de responder, identifique mentalmente:
+1. principal problema ativo
+2. maior risco atual
+3. decisao mais importante do plantao
 
 Anotacoes:
 {build_sbar_context(notes_list)}
 """.strip()
+    return prompt
+
+
+def ask_gemini_for_single_sbar_row(client, note: dict, current_date: str) -> dict[str, str | int]:
+    prompt = build_sbar_prompt([note], current_date)
 
     response = client.models.generate_content(
         model=app.config["GEMINI_MODEL"],
         contents=prompt,
+        config={"temperature": app.config["GEMINI_TEMPERATURE"]},
     )
     text = getattr(response, "text", None)
     if not text:
@@ -360,42 +468,50 @@ Anotacoes:
     if not isinstance(parsed, list):
         raise RuntimeError("invalid_json")
 
-    valid_note_ids = {int(note["id"]) for note in notes_list}
-    cleaned_rows: list[dict[str, str | int]] = []
-    for item in parsed:
-        if not isinstance(item, dict):
-            raise RuntimeError("invalid_json")
+    if len(parsed) != 1 or not isinstance(parsed[0], dict):
+        raise RuntimeError("invalid_json")
 
-        raw_note_id = item.get("note_id")
-        note_id = int(raw_note_id) if isinstance(raw_note_id, int) else None
-        if note_id not in valid_note_ids:
-            raise RuntimeError("invalid_json")
+    item = parsed[0]
+    raw_note_id = item.get("note_id")
+    note_id = int(raw_note_id) if isinstance(raw_note_id, int) else None
+    if note_id != int(note["id"]):
+        raise RuntimeError("invalid_json")
 
-        cleaned_rows.append(
-            {
-                "note_id": note_id,
-                "situacao": clean_assistant_text(str(item.get("situacao", "Nao informado."))) or "Nao informado.",
-                "background": clean_assistant_text(str(item.get("background", "Nao informado."))) or "Nao informado.",
-                "avaliacao": clean_assistant_text(str(item.get("avaliacao", "Nao informado."))) or "Nao informado.",
-                "recomendacao": clean_assistant_text(str(item.get("recomendacao", "Nao informado."))) or "Nao informado.",
-            }
-        )
+    return {
+        "note_id": note_id,
+        "paciente": "",
+        "hd": clean_assistant_text(str(item.get("hd", "Nao informado."))) or "Nao informado.",
+        "status_hoje": clean_assistant_text(str(item.get("status_hoje", "Nao informado."))) or "Nao informado.",
+        "riscos_pendencias": clean_assistant_text(str(item.get("riscos_pendencias", "Nao informado."))) or "Nao informado.",
+        "plano": clean_assistant_text(str(item.get("plano", "Nao informado."))) or "Nao informado.",
+    }
 
-    cleaned_rows.sort(key=lambda row: [int(note["id"]) for note in notes_list].index(int(row["note_id"])))
-    return cleaned_rows
+
+def ask_gemini_for_sbar_rows(notes_list: list[dict]) -> list[dict[str, str | int]]:
+    if genai is None:
+        raise RuntimeError("sdk_missing")
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("api_key_missing")
+
+    client = genai.Client(api_key=api_key)
+    current_date = date.today().isoformat()
+    return [ask_gemini_for_single_sbar_row(client, note, current_date) for note in notes_list]
 
 
 def get_sbar_rows_from_form() -> list[dict[str, str | int]]:
     note_ids = request.form.getlist("sbar_note_id")
-    situacoes = request.form.getlist("sbar_situacao")
-    backgrounds = request.form.getlist("sbar_background")
-    avaliacoes = request.form.getlist("sbar_avaliacao")
-    recomendacoes = request.form.getlist("sbar_recomendacao")
+    pacientes = request.form.getlist("sbar_paciente")
+    hds = request.form.getlist("sbar_hd")
+    status_hoje = request.form.getlist("sbar_status_hoje")
+    riscos_pendencias = request.form.getlist("sbar_riscos_pendencias")
+    planos = request.form.getlist("sbar_plano")
 
     row_count = len(note_ids)
     if not row_count or not all(
         len(values) == row_count
-        for values in (situacoes, backgrounds, avaliacoes, recomendacoes)
+        for values in (pacientes, hds, status_hoje, riscos_pendencias, planos)
     ):
         raise RuntimeError("invalid_sbar_form")
 
@@ -407,10 +523,38 @@ def get_sbar_rows_from_form() -> list[dict[str, str | int]]:
         rows.append(
             {
                 "note_id": int(note_id_raw),
-                "situacao": clean_assistant_text(situacoes[index]) or "Nao informado.",
-                "background": clean_assistant_text(backgrounds[index]) or "Nao informado.",
-                "avaliacao": clean_assistant_text(avaliacoes[index]) or "Nao informado.",
-                "recomendacao": clean_assistant_text(recomendacoes[index]) or "Nao informado.",
+                "paciente": clean_assistant_text(pacientes[index]),
+                "hd": clean_assistant_text(hds[index]) or "Nao informado.",
+                "status_hoje": clean_assistant_text(status_hoje[index]) or "Nao informado.",
+                "riscos_pendencias": clean_assistant_text(riscos_pendencias[index]) or "Nao informado.",
+                "plano": clean_assistant_text(planos[index]) or "Nao informado.",
+            }
+        )
+
+    return rows
+
+
+def get_sbar_rows_from_payload(payload: object) -> list[dict[str, str | int]]:
+    if not isinstance(payload, list) or not payload:
+        raise RuntimeError("invalid_sbar_form")
+
+    rows: list[dict[str, str | int]] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            raise RuntimeError("invalid_sbar_form")
+
+        note_id = item.get("note_id")
+        if not isinstance(note_id, int):
+            raise RuntimeError("invalid_sbar_form")
+
+        rows.append(
+            {
+                "note_id": note_id,
+                "paciente": clean_assistant_text(str(item.get("paciente", ""))),
+                "hd": clean_assistant_text(str(item.get("hd", ""))) or "Nao informado.",
+                "status_hoje": clean_assistant_text(str(item.get("status_hoje", ""))) or "Nao informado.",
+                "riscos_pendencias": clean_assistant_text(str(item.get("riscos_pendencias", ""))) or "Nao informado.",
+                "plano": clean_assistant_text(str(item.get("plano", ""))) or "Nao informado.",
             }
         )
 
@@ -462,7 +606,8 @@ def build_note_pdf(note: dict) -> BytesIO:
         lines.append(current)
         return lines
 
-    write_line(f"Anotacao #{note['id']}", "Helvetica-Bold", 14)
+    title = clean_assistant_text(str(note.get("title", ""))) or f"Anotacao #{note['id']}"
+    write_line(title, "Helvetica-Bold", 14)
     write_line(f"Criado em: {note['created_at']}", "Helvetica", 10)
     y_position -= 8
 
@@ -819,24 +964,27 @@ def notes():
             session.pop("sbar_selected_note_ids", None)
             selected_sbar_note_ids = []
             sbar_output = None
-            flash("Tabela SBAR removida.", "success")
+            flash("Tabela de passagem removida.", "success")
         elif form_name == "save_sbar":
             try:
                 sbar_output = get_sbar_rows_from_form()
                 db.save_user_sbar(user_id, selected_sbar_note_ids, sbar_output)
-                flash("Tabela SBAR salva.", "success")
+                flash("Tabela de passagem salva.", "success")
             except RuntimeError:
-                flash("Nao foi possivel salvar as edicoes da tabela SBAR.", "error")
+                flash("Nao foi possivel salvar as edicoes da tabela de passagem.", "error")
         elif form_name == "clear_review":
             session.pop("review_output", None)
             review_output = None
             flash("Analise removida.", "success")
         else:
+            title = request.form.get("title", "").strip()
             content = request.form.get("content", "").strip()
-            if not content:
+            if not title:
+                flash("A anotacao precisa de um titulo.", "error")
+            elif not content:
                 flash("A anotacao nao pode ficar vazia.", "error")
             else:
-                db.create_note(user_id, content)
+                db.create_note(user_id, title, content)
                 session.pop("review_output", None)
                 flash("Anotacao salva.", "success")
                 return redirect(url_for("notes"))
@@ -866,18 +1014,74 @@ def notes():
 @app.route("/notes/<int:note_id>/edit", methods=["POST"])
 @login_required
 def edit_note(note_id: int):
+    title = request.form.get("title", "").strip()
+    review_output = clean_assistant_text(request.form.get("review_output", ""))
     content = request.form.get("content", "").strip()
+    if not title:
+        flash("A anotacao precisa de um titulo.", "error")
+        return redirect(url_for("notes"))
     if not content:
         flash("A anotacao nao pode ficar vazia.", "error")
         return redirect(url_for("notes", edit=note_id))
 
-    if not db.update_note(current_user_id(), note_id, content):
+    if not db.update_note(current_user_id(), note_id, title, content, review_output):
         flash("Anotacao nao encontrada.", "error")
         return redirect(url_for("notes"))
 
     session.pop("review_output", None)
     flash("Anotacao atualizada.", "success")
     return redirect(url_for("notes"))
+
+
+@app.route("/notes/<int:note_id>/autosave", methods=["POST"])
+@login_required
+def autosave_note(note_id: int):
+    payload = request.get_json(silent=True) or {}
+    title = str(payload.get("title", "")).strip()
+    review_output = clean_assistant_text(str(payload.get("review_output", "")))
+    content = str(payload.get("content", "")).strip()
+    if not title:
+        return {"ok": False, "error": "A anotacao precisa de um titulo."}, 400
+    if not content:
+        return {"ok": False, "error": "A anotacao nao pode ficar vazia."}, 400
+
+    if not db.update_note(current_user_id(), note_id, title, content, review_output):
+        return {"ok": False, "error": "Anotacao nao encontrada."}, 404
+
+    session.pop("review_output", None)
+    return {"ok": True}, 200
+
+
+@app.route("/notes/<int:note_id>/review", methods=["POST"])
+@login_required
+def review_note(note_id: int):
+    note = db.get_user_note(current_user_id(), note_id)
+    if note is None:
+        return {"ok": False, "error": "Anotacao nao encontrada."}, 404
+
+    if db.get_note_review_count(note_id, today_key()) >= 4:
+        return {"ok": False, "error": "Essa anotacao ja atingiu o limite diario de 4 analises."}, 400
+
+    try:
+        review_output = ask_gemini_for_medical_review([note])
+        db.increment_note_review_count(note_id, today_key())
+    except RuntimeError as exc:
+        if str(exc) == "sdk_missing":
+            return {"ok": False, "error": "A biblioteca google-genai nao esta instalada no ambiente."}, 500
+        if str(exc) == "api_key_missing":
+            return {"ok": False, "error": "Defina a variavel GEMINI_API_KEY para ativar o assistente."}, 500
+        if str(exc) == "empty_response":
+            return {"ok": False, "error": "O Gemini nao retornou texto nesta tentativa."}, 502
+        return {"ok": False, "error": "Nao foi possivel consultar o Gemini."}, 502
+    except Exception:
+        return {"ok": False, "error": "Ocorreu um erro ao consultar o Gemini."}, 500
+
+    return {
+        "ok": True,
+        "title": clean_assistant_text(str(note.get("title", ""))) or "Sem título",
+        "review_output": review_output,
+        "review_count": db.get_note_review_count(note_id, today_key()),
+    }, 200
 
 
 @app.route("/notes/<int:note_id>/delete", methods=["POST"])
@@ -887,6 +1091,35 @@ def delete_note(note_id: int):
     session.pop("review_output", None)
     flash("Anotacao removida.", "success")
     return redirect(url_for("notes"))
+
+
+@app.route("/sbar/autosave", methods=["POST"])
+@login_required
+def autosave_sbar():
+    payload = request.get_json(silent=True) or {}
+    selected_note_ids_raw = payload.get("selected_note_ids", [])
+    rows_payload = payload.get("rows", [])
+
+    if not isinstance(selected_note_ids_raw, list) or not all(isinstance(note_id, int) for note_id in selected_note_ids_raw):
+        return {"ok": False, "error": "Selecao da tabela SBAR invalida."}, 400
+
+    selected_note_ids = list(dict.fromkeys(int(note_id) for note_id in selected_note_ids_raw))
+
+    try:
+        rows = get_sbar_rows_from_payload(rows_payload)
+    except RuntimeError:
+        return {"ok": False, "error": "Nao foi possivel validar a tabela SBAR."}, 400
+
+    if [int(row["note_id"]) for row in rows] != selected_note_ids:
+        return {"ok": False, "error": "As linhas da tabela SBAR nao conferem com a selecao atual."}, 400
+
+    user_id = current_user_id()
+    note_ids = {int(note["id"]) for note in db.list_user_notes(user_id)}
+    if any(note_id not in note_ids for note_id in selected_note_ids):
+        return {"ok": False, "error": "A tabela SBAR referencia uma anotacao invalida."}, 400
+
+    db.save_user_sbar(user_id, selected_note_ids, rows)
+    return {"ok": True}, 200
 
 
 @app.route("/notes/<int:note_id>/pdf", methods=["GET"])

@@ -110,7 +110,7 @@ def register_failed_login(user_id: int, failed_attempts: int, locked_until: date
 def list_user_notes(user_id: int) -> list[dict[str, Any]]:
     return fetch_all(
         """
-        SELECT id, content, created_at
+        SELECT id, title, review_output, content, created_at
         FROM notes
         WHERE user_id = %s
         ORDER BY created_at DESC, id DESC
@@ -122,7 +122,7 @@ def list_user_notes(user_id: int) -> list[dict[str, Any]]:
 def get_user_note(user_id: int, note_id: int) -> dict[str, Any] | None:
     return fetch_one(
         """
-        SELECT id, content, created_at
+        SELECT id, title, review_output, content, created_at
         FROM notes
         WHERE user_id = %s AND id = %s
         """,
@@ -130,22 +130,24 @@ def get_user_note(user_id: int, note_id: int) -> dict[str, Any] | None:
     )
 
 
-def create_note(user_id: int, content: str) -> None:
+def create_note(user_id: int, title: str, content: str) -> None:
     execute(
-        "INSERT INTO notes (user_id, content) VALUES (%s, %s)",
-        (user_id, content),
+        "INSERT INTO notes (user_id, title, review_output, content) VALUES (%s, %s, %s, %s)",
+        (user_id, title, "", content),
     )
     get_db().commit()
 
 
-def update_note(user_id: int, note_id: int, content: str) -> bool:
+def update_note(user_id: int, note_id: int, title: str, content: str, review_output: str) -> bool:
     cursor = execute(
         """
         UPDATE notes
-        SET content = %s
+        SET title = %s,
+            review_output = %s,
+            content = %s
         WHERE id = %s AND user_id = %s
         """,
-        (content, note_id, user_id),
+        (title, review_output, content, note_id, user_id),
     )
     get_db().commit()
     return cursor.rowcount > 0
