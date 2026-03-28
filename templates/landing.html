@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html class="light" lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Meu Bloco: Seu Bloco de Notas Clinico</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "secondary-fixed": "#a1efff",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed": "#021f29",
+                        "tertiary-fixed": "#cbe7f5",
+                        "on-surface": "#191c1e",
+                        "surface-bright": "#f7f9fb",
+                        "primary-fixed": "#d9e2ff",
+                        "primary": "#0D47A1",
+                        "on-secondary-fixed-variant": "#004e59",
+                        "inverse-surface": "#2d3133",
+                        "on-primary-fixed": "#001945",
+                        "secondary-container": "#58e6ff",
+                        "tertiary-fixed-dim": "#afcbd8",
+                        "surface-container-high": "#e6e8ea",
+                        "tertiary": "#1e3843",
+                        "secondary-fixed-dim": "#44d8f1",
+                        "primary-container": "#0D47A1",
+                        "on-primary-container": "#a1bbff",
+                        "background": "#f7f9fb",
+                        "on-error": "#ffffff",
+                        "surface-dim": "#d8dadc",
+                        "on-tertiary-container": "#a5c0ce",
+                        "on-secondary": "#ffffff",
+                        "on-background": "#191c1e",
+                        "surface-tint": "#0D47A1",
+                        "on-tertiary": "#ffffff",
+                        "inverse-on-surface": "#eff1f3",
+                        "surface-container-highest": "#e0e3e5",
+                        "surface-container-lowest": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "surface-variant": "#e0e3e5",
+                        "on-secondary-fixed": "#001f25",
+                        "on-secondary-container": "#006573",
+                        "surface": "#f7f9fb",
+                        "error": "#ba1a1a",
+                        "outline-variant": "#c3c6d4",
+                        "outline": "#737783",
+                        "secondary": "#006876",
+                        "surface-container-low": "#f2f4f6",
+                        "on-tertiary-fixed-variant": "#304a55",
+                        "on-surface-variant": "#434652",
+                        "inverse-primary": "#b0c6ff",
+                        "primary-fixed-dim": "#b0c6ff",
+                        "on-primary": "#ffffff",
+                        "tertiary-container": "#354f5b",
+                        "surface-container": "#eceef0",
+                        "on-primary-fixed-variant": "#00429c"
+                    },
+                    fontFamily: {
+                        "headline": ["Plus Jakarta Sans"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        body { font-family: "Inter", sans-serif; }
+        h1, h2, h3, h4 { font-family: "Plus Jakarta Sans", sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary-fixed selection:text-on-primary-fixed">
+    <nav class="fixed top-0 z-50 flex w-full items-center justify-between border-b border-outline-variant/30 bg-[#f7f9fb] px-6 py-4 md:px-24">
+        <a href="{{ url_for('index') }}" class="text-xl font-bold tracking-tighter text-primary">Meu Bloco</a>
+        <div class="flex items-center gap-4">
+            <a href="{{ url_for('login') }}" class="px-4 py-2 text-sm font-semibold text-primary">Login</a>
+            <a href="{{ url_for('register') }}" class="rounded bg-primary px-6 py-2 text-sm font-semibold text-white shadow-md transition-all active:scale-95">Comecar</a>
+        </div>
+    </nav>
+
+    <main class="pt-24">
+        <section class="mx-auto max-w-4xl px-8 py-20 text-center md:px-24 md:py-32">
+            <h1 class="mb-6 text-4xl font-extrabold leading-tight tracking-tight text-primary md:text-6xl">
+                Meu Bloco: seu bloco de notas clinico
+            </h1>
+            <p class="mb-12 text-xl leading-relaxed text-on-surface-variant">
+                Registre, organize e revise anotacoes clinicas com mais clareza.
+                Menos atrito na rotina, mais foco no que importa.
+            </p>
+            <div class="flex flex-col justify-center gap-4 sm:flex-row">
+                <a href="{{ url_for('register') }}" class="flex items-center justify-center gap-2 rounded bg-primary px-10 py-4 text-lg font-bold text-white shadow-lg transition-opacity hover:opacity-90">
+                    Experimentar gratuitamente
+                    <span class="material-symbols-outlined">arrow_forward</span>
+                </a>
+                <a href="{{ url_for('login') }}" class="flex items-center justify-center rounded border border-outline px-10 py-4 text-lg font-semibold text-on-surface transition-colors hover:bg-surface-container">
+                    Entrar
+                </a>
+            </div>
+        </section>
+
+        <section class="border-y border-outline-variant/20 bg-surface-container-low px-8 py-24 md:px-24">
+            <div class="mx-auto max-w-5xl">
+                <h2 class="mb-16 text-center text-3xl font-bold">Como funciona</h2>
+                <div class="grid grid-cols-1 gap-12 text-center md:grid-cols-3">
+                    <div class="flex flex-col items-center">
+                        <div class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary-fixed text-primary">
+                            <span class="material-symbols-outlined text-3xl">edit_note</span>
+                        </div>
+                        <h3 class="mb-3 text-xl font-bold">Escreva suas notas</h3>
+                        <p class="text-sm text-on-surface-variant">
+                            Registre evolucoes, observacoes e informacoes importantes sem complicar seu fluxo.
+                        </p>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary-fixed text-primary">
+                            <span class="material-symbols-outlined text-3xl">psychology</span>
+                        </div>
+                        <h3 class="mb-3 text-xl font-bold">Revise com apoio de IA</h3>
+                        <p class="text-sm text-on-surface-variant">
+                            Use a IA para revisar o conteudo e recuperar contexto com mais objetividade.
+                        </p>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary-fixed text-primary">
+                            <span class="material-symbols-outlined text-3xl">picture_as_pdf</span>
+                        </div>
+                        <h3 class="mb-3 text-xl font-bold">Exporte quando precisar</h3>
+                        <p class="text-sm text-on-surface-variant">
+                            Gere PDFs das anotacoes e mantenha uma saida simples para compartilhar ou arquivar.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mx-auto max-w-3xl px-8 py-24 text-center md:px-24">
+            <h2 class="mb-6 text-2xl font-bold text-on-surface md:text-3xl">Mais clareza para a rotina clinica</h2>
+            <p class="text-lg text-on-surface-variant">
+                O Meu Bloco foi pensado para reduzir a desorganizacao das anotacoes do dia a dia.
+                A interface e direta, o registro e rapido, e a revisao com IA entra como apoio pratico,
+                sem tentar substituir julgamento profissional.
+            </p>
+        </section>
+
+        <section class="bg-primary px-8 py-24 text-center text-white">
+            <div class="mx-auto max-w-2xl">
+                <h2 class="mb-8 text-3xl font-extrabold md:text-4xl">Otimize sua rotina hoje</h2>
+                <p class="mb-10 text-lg opacity-90">
+                    Centralize suas anotacoes, revise com mais clareza e mantenha tudo acessivel em um so lugar.
+                </p>
+                <a href="{{ url_for('register') }}" class="inline-flex rounded bg-white px-12 py-5 text-xl font-bold text-primary shadow-xl transition-colors hover:bg-surface-bright">
+                    Comecar agora
+                </a>
+                <p class="mt-6 text-sm opacity-70">Acesso imediato. Sem configuracao complexa.</p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="border-t border-outline-variant/30 bg-surface-container-high px-8 py-12 md:px-24">
+        <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 md:flex-row">
+            <div class="text-lg font-bold text-primary">Meu Bloco</div>
+            <div class="text-xs text-on-surface-variant">© 2026 Meu Bloco.</div>
+            <div class="flex gap-6 text-xs text-on-surface-variant">
+                <a class="hover:text-primary" href="{{ url_for('login') }}">Privacidade</a>
+                <a class="hover:text-primary" href="{{ url_for('register') }}">Termos</a>
+                <a class="hover:text-primary" href="{{ url_for('login') }}">Suporte</a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

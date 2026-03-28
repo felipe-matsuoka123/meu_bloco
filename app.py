@@ -671,7 +671,7 @@ def redact_note_content(content: str) -> tuple[str, bool]:
 def index():
     if session.get("logged_in"):
         return redirect(url_for("notes"))
-    return redirect(url_for("login"))
+    return render_template("landing.html")
 
 
 @app.route("/healthz", methods=["GET"])

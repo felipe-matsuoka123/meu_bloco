@@ -1,164 +1,206 @@
-{% extends "base.html" %}
-
-{% block title %}Entrar | Meu Bloco{% endblock %}
-
-{% block content %}
-<section class="auth-layout">
-    <article class="card auth-panel auth-panel-brand">
-        <p class="eyebrow">Meu Bloco</p>
-        <h1>Um lugar simples para guardar o que importa.</h1>
-        <p class="muted lead">
-            Anote, organize e retome suas informacoes com clareza.
-            Sem excesso. Sem distrações.
-        </p>
-        <div class="motion-sculpture" data-motion-sculpture aria-hidden="true">
-            <canvas class="motion-canvas" data-motion-canvas></canvas>
-        </div>
-    </article>
-
-    <section class="card auth-panel auth-panel-form">
-        <div class="panel-header">
-            <div>
-                <p class="eyebrow">Acesso</p>
-                <h2>Entrar</h2>
-            </div>
-        </div>
-
-        <form method="post" class="stack">
-            <label class="field">
-                <span>Nome de usuario</span>
-                <input type="text" name="username" autocomplete="username" placeholder="Seu usuário" required>
-            </label>
-
-            <label class="field">
-                <span>Senha</span>
-                <input type="password" name="password" autocomplete="current-password" placeholder="Digite sua senha" required>
-            </label>
-
-            <button type="submit">Entrar</button>
-        </form>
-
-        <p class="muted auth-link">Ainda nao tem conta? <a href="{{ url_for('register') }}">Criar usuario</a></p>
-    </section>
-</section>
-{% endblock %}
-
-{% block scripts %}
-<script>
-    document.addEventListener("DOMContentLoaded", () => {
-        const sculpture = document.querySelector("[data-motion-sculpture]");
-        const canvas = document.querySelector("[data-motion-canvas]");
-        if (!sculpture || !canvas || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-            return;
-        }
-
-        const context = canvas.getContext("2d");
-        const dots = [];
-        const pointer = { x: 0, y: 0, active: false };
-        let width = 0;
-        let height = 0;
-        let animationFrame = 0;
-
-        const makeDots = () => {
-            dots.length = 0;
-            const count = Math.max(38, Math.floor((width * height) / 3600));
-            for (let index = 0; index < count; index += 1) {
-                const x = Math.random() * width;
-                const y = Math.random() * height;
-                dots.push({
-                    x,
-                    y,
-                    baseX: x,
-                    baseY: y,
-                    vx: 0,
-                    vy: 0,
-                    size: 1.2 + Math.random() * 2.2,
-                    hue: Math.random() > 0.5 ? "37, 99, 235" : "14, 165, 233",
-                });
-            }
-        };
-
-        const resize = () => {
-            const rect = sculpture.getBoundingClientRect();
-            width = Math.max(1, Math.floor(rect.width));
-            height = Math.max(1, Math.floor(rect.height));
-            canvas.width = width;
-            canvas.height = height;
-            makeDots();
-        };
-
-        const setPointer = (clientX, clientY) => {
-            const rect = sculpture.getBoundingClientRect();
-            pointer.x = clientX - rect.left;
-            pointer.y = clientY - rect.top;
-            pointer.active = true;
-        };
-
-        const render = () => {
-            context.clearRect(0, 0, width, height);
-
-            for (const dot of dots) {
-                const restoreX = (dot.baseX - dot.x) * 0.01;
-                const restoreY = (dot.baseY - dot.y) * 0.01;
-                dot.vx += restoreX;
-                dot.vy += restoreY;
-
-                if (pointer.active) {
-                    const dx = pointer.x - dot.x;
-                    const dy = pointer.y - dot.y;
-                    const distance = Math.hypot(dx, dy);
-                    const force = Math.min(0.11, 18 / Math.max(distance, 30));
-                    dot.vx += (dx / Math.max(distance, 1)) * force;
-                    dot.vy += (dy / Math.max(distance, 1)) * force;
-                }
-
-                dot.vx *= 0.92;
-                dot.vy *= 0.92;
-                dot.x += dot.vx;
-                dot.y += dot.vy;
-
-                context.beginPath();
-                context.fillStyle = `rgba(${dot.hue}, 0.78)`;
-                context.arc(dot.x, dot.y, dot.size, 0, Math.PI * 2);
-                context.fill();
-            }
-
-            for (let index = 0; index < dots.length; index += 1) {
-                const dot = dots[index];
-                for (let offset = index + 1; offset < dots.length; offset += 1) {
-                    const neighbor = dots[offset];
-                    const dx = neighbor.x - dot.x;
-                    const dy = neighbor.y - dot.y;
-                    const distance = Math.hypot(dx, dy);
-                    if (distance < 56) {
-                        context.beginPath();
-                        context.strokeStyle = `rgba(123, 145, 181, ${0.15 * (1 - distance / 56)})`;
-                        context.lineWidth = 1;
-                        context.moveTo(dot.x, dot.y);
-                        context.lineTo(neighbor.x, neighbor.y);
-                        context.stroke();
+<!DOCTYPE html>
+<html class="light" lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Login | Meu Bloco</title>
+    <link href="https://fonts.googleapis.com" rel="preconnect">
+    <link crossorigin href="https://fonts.gstatic.com" rel="preconnect">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "tertiary-fixed": "#cbe7f5",
+                        "on-surface": "#191c1e",
+                        "on-error": "#ffffff",
+                        "surface-bright": "#f7f9fb",
+                        "background": "#f7f9fb",
+                        "tertiary-container": "#354f5b",
+                        "surface-container-low": "#f2f4f6",
+                        "surface-container-highest": "#e0e3e5",
+                        "error": "#ba1a1a",
+                        "secondary-container": "#58e6ff",
+                        "outline": "#737783",
+                        "on-primary-fixed-variant": "#00429c",
+                        "primary-fixed": "#d9e2ff",
+                        "tertiary-fixed-dim": "#afcbd8",
+                        "on-tertiary-fixed": "#021f29",
+                        "primary-container": "#0d47a1",
+                        "on-secondary-container": "#006573",
+                        "surface-tint": "#2b5bb5",
+                        "on-secondary-fixed-variant": "#004e59",
+                        "secondary-fixed": "#a1efff",
+                        "on-tertiary-fixed-variant": "#304a55",
+                        "surface-container": "#eceef0",
+                        "surface-dim": "#d8dadc",
+                        "inverse-surface": "#2d3133",
+                        "primary": "#003178",
+                        "primary-fixed-dim": "#b0c6ff",
+                        "on-secondary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "inverse-on-surface": "#eff1f3",
+                        "on-secondary-fixed": "#001f25",
+                        "on-primary-container": "#a1bbff",
+                        "inverse-primary": "#b0c6ff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-container": "#a5c0ce",
+                        "on-surface-variant": "#434652",
+                        "outline-variant": "#c3c6d4",
+                        "secondary": "#006876",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-fixed": "#001945",
+                        "secondary-fixed-dim": "#44d8f1",
+                        "tertiary": "#1e3843",
+                        "on-primary": "#ffffff",
+                        "surface-variant": "#e0e3e5",
+                        "on-background": "#191c1e",
+                        "surface": "#f7f9fb",
+                        "surface-container-high": "#e6e8ea",
+                        "error-container": "#ffdad6"
+                    },
+                    fontFamily: {
+                        "headline": ["Plus Jakarta Sans"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.5rem",
+                        "xl": "0.5rem",
+                        "full": "9999px"
                     }
                 }
             }
-
-            animationFrame = window.requestAnimationFrame(render);
         };
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+            vertical-align: middle;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .primary-gradient {
+            background: linear-gradient(135deg, #003178 0%, #0d47a1 100%);
+        }
+    </style>
+</head>
+<body class="flex min-h-screen flex-col bg-surface font-body text-on-surface">
+    <header class="top-0 z-50 bg-[#f7f9fb]">
+        <div class="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
+            <div class="flex items-center gap-2">
+                <a href="{{ url_for('index') }}" class="font-headline text-xl font-extrabold tracking-tighter text-[#003178]">Meu Bloco</a>
+            </div>
+            <div class="flex items-center gap-4">
+                <a class="rounded-lg px-4 py-2 font-headline text-base font-bold tracking-tight text-[#003178] transition-all active:scale-[0.99] active:opacity-80 hover:bg-[#e0e3e5]/50" href="{{ url_for('login') }}">Login</a>
+                <a class="rounded-lg px-4 py-2 font-headline text-base font-bold tracking-tight text-[#191c1e] transition-all active:scale-[0.99] active:opacity-80 hover:bg-[#e0e3e5]/50" href="{{ url_for('register') }}">Criar conta</a>
+            </div>
+        </div>
+        <div class="h-[1px] w-full bg-[#f2f4f6]"></div>
+    </header>
 
-        resize();
-        render();
+    <main class="relative flex flex-grow items-center justify-center overflow-hidden p-6">
+        <div class="absolute right-[-5%] top-[-10%] h-[400px] w-[400px] rounded-full bg-secondary-fixed/10 blur-[100px]"></div>
+        <div class="absolute bottom-[-10%] left-[-5%] h-[300px] w-[300px] rounded-full bg-primary/5 blur-[80px]"></div>
 
-        sculpture.addEventListener("pointermove", (event) => {
-            setPointer(event.clientX, event.clientY);
+        <div class="z-10 w-full max-w-[440px]">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <section class="mb-4 space-y-3" aria-live="polite">
+                        {% for category, message in messages %}
+                            <div class="rounded-xl border px-4 py-3 text-sm font-medium {% if category == 'error' %}border-error/20 bg-error-container text-on-error-container{% else %}border-secondary/20 bg-secondary-fixed/40 text-[#004e59]{% endif %}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    </section>
+                {% endif %}
+            {% endwith %}
+
+            <div class="glass-panel overflow-hidden rounded-xl border-none shadow-[0_20px_40px_rgba(0,49,120,0.06)]">
+                <div class="bg-surface-container-highest/30 px-8 pb-6 pt-10 text-center">
+                    <h1 class="mb-2 font-headline text-2xl font-extrabold tracking-tight text-primary">Bem-vindo de volta</h1>
+                    <p class="text-sm font-medium text-on-surface-variant">Acesse sua estacao de trabalho clinica</p>
+                </div>
+
+                <form method="post" class="flex flex-col gap-6 px-8 pb-10 pt-4">
+                    <div class="group">
+                        <label class="mb-1 ml-1 block text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant" for="username">Nome de usuario</label>
+                        <div class="relative">
+                            <span class="material-symbols-outlined absolute left-0 top-1/2 -translate-y-1/2 text-outline-variant transition-colors group-focus-within:text-secondary">person</span>
+                            <input class="w-full border-b-2 border-l-0 border-r-0 border-t-0 border-outline-variant bg-transparent py-3 pl-8 text-sm font-medium text-on-surface placeholder:text-outline-variant/60 transition-all focus:border-secondary focus:ring-0" id="username" name="username" autocomplete="username" placeholder="ex: dr.silva.med" required type="text">
+                        </div>
+                    </div>
+
+                    <div class="group">
+                        <label class="mb-1 ml-1 block text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant" for="password">Senha</label>
+                        <div class="relative">
+                            <span class="material-symbols-outlined absolute left-0 top-1/2 -translate-y-1/2 text-outline-variant transition-colors group-focus-within:text-secondary">lock</span>
+                            <input class="w-full border-b-2 border-l-0 border-r-0 border-t-0 border-outline-variant bg-transparent py-3 pl-8 text-sm font-medium text-on-surface placeholder:text-outline-variant/60 transition-all focus:border-secondary focus:ring-0" id="password" name="password" autocomplete="current-password" placeholder="••••••••" required type="password">
+                            <button class="absolute right-0 top-1/2 -translate-y-1/2 text-outline-variant transition-colors hover:text-primary" data-password-toggle type="button">
+                                <span class="material-symbols-outlined text-lg">visibility</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end -mt-2">
+                        <span class="text-xs font-bold text-outline">Acesso protegido por senha</span>
+                    </div>
+
+                    <button class="primary-gradient mt-2 rounded-lg py-4 font-headline font-bold text-white shadow-lg transition-all hover:-translate-y-[1px] hover:shadow-xl active:scale-[0.98]" type="submit">
+                        Entrar
+                    </button>
+
+                    <div class="my-2 flex items-center gap-4">
+                        <div class="h-[1px] flex-grow bg-outline-variant/20"></div>
+                        <span class="text-[0.625rem] font-bold uppercase tracking-tighter text-outline-variant">Acesso seguro</span>
+                        <div class="h-[1px] flex-grow bg-outline-variant/20"></div>
+                    </div>
+
+                    <div class="text-center">
+                        <p class="text-xs font-medium text-on-surface-variant">
+                            Ainda nao tem conta?
+                            <a class="ml-1 font-bold text-primary transition-colors hover:text-secondary" href="{{ url_for('register') }}">Criar usuario</a>
+                        </p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <footer class="border-t border-[#c3c6d4]/15 bg-[#f2f4f6]">
+        <div class="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-4 px-6 py-8 md:flex-row">
+            <div class="font-label text-xs font-medium uppercase tracking-widest text-[#191c1e]">© 2026 Meu Bloco.</div>
+            <nav class="flex flex-wrap justify-center gap-6">
+                <a class="font-label text-xs font-medium uppercase tracking-widest text-[#191c1e] transition-transform hover:-translate-y-[1px] hover:text-[#003178]" href="{{ url_for('index') }}">Inicio</a>
+                <a class="font-label text-xs font-medium uppercase tracking-widest text-[#191c1e] transition-transform hover:-translate-y-[1px] hover:text-[#003178]" href="{{ url_for('register') }}">Cadastro</a>
+                <a class="font-label text-xs font-medium uppercase tracking-widest text-[#191c1e] transition-transform hover:-translate-y-[1px] hover:text-[#003178]" href="{{ url_for('login') }}">Suporte</a>
+            </nav>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const passwordInput = document.querySelector("#password");
+            const toggle = document.querySelector("[data-password-toggle]");
+            if (passwordInput && toggle) {
+                toggle.addEventListener("click", () => {
+                    const isPassword = passwordInput.type === "password";
+                    passwordInput.type = isPassword ? "text" : "password";
+                    const icon = toggle.querySelector(".material-symbols-outlined");
+                    if (icon) {
+                        icon.textContent = isPassword ? "visibility_off" : "visibility";
+                    }
+                });
+            }
         });
-
-        sculpture.addEventListener("pointerleave", () => {
-            pointer.active = false;
-        });
-
-        window.addEventListener("resize", resize);
-        window.addEventListener("beforeunload", () => {
-            window.cancelAnimationFrame(animationFrame);
-        });
-    });
-</script>
-{% endblock %}
+    </script>
+</body>
+</html>

@@ -1,52 +1,227 @@
-{% extends "base.html" %}
-
-{% block title %}Criar Conta | Meu Bloco{% endblock %}
-
-{% block content %}
-<section class="auth-layout">
-    <article class="card auth-panel auth-panel-brand">
-        <p class="eyebrow">Novo acesso</p>
-        <h1>Comece com um espaco seu.</h1>
-        <p class="muted lead">
-            Crie sua conta e mantenha suas anotacoes sempre por perto,
-            em um ambiente limpo e focado.
-        </p>
-    </article>
-
-    <section class="card auth-panel auth-panel-form">
-        <div class="panel-header">
-            <div>
-                <p class="eyebrow">Cadastro</p>
-                <h2>Criar conta</h2>
+<!DOCTYPE html>
+<html class="light" lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Criar Conta | Meu Bloco</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "tertiary-fixed": "#cbe7f5",
+                        "on-surface": "#191c1e",
+                        "on-error": "#ffffff",
+                        "surface-bright": "#f7f9fb",
+                        "background": "#f7f9fb",
+                        "tertiary-container": "#354f5b",
+                        "surface-container-low": "#f2f4f6",
+                        "surface-container-highest": "#e0e3e5",
+                        "error": "#ba1a1a",
+                        "secondary-container": "#58e6ff",
+                        "outline": "#737783",
+                        "on-primary-fixed-variant": "#00429c",
+                        "primary-fixed": "#d9e2ff",
+                        "tertiary-fixed-dim": "#afcbd8",
+                        "on-tertiary-fixed": "#021f29",
+                        "primary-container": "#0d47a1",
+                        "on-secondary-container": "#006573",
+                        "surface-tint": "#2b5bb5",
+                        "on-secondary-fixed-variant": "#004e59",
+                        "secondary-fixed": "#a1efff",
+                        "on-tertiary-fixed-variant": "#304a55",
+                        "surface-container": "#eceef0",
+                        "surface-dim": "#d8dadc",
+                        "inverse-surface": "#2d3133",
+                        "primary": "#003178",
+                        "primary-fixed-dim": "#b0c6ff",
+                        "on-secondary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "inverse-on-surface": "#eff1f3",
+                        "on-secondary-fixed": "#001f25",
+                        "on-primary-container": "#a1bbff",
+                        "inverse-primary": "#b0c6ff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-container": "#a5c0ce",
+                        "on-surface-variant": "#434652",
+                        "outline-variant": "#c3c6d4",
+                        "secondary": "#006876",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-fixed": "#001945",
+                        "secondary-fixed-dim": "#44d8f1",
+                        "tertiary": "#1e3843",
+                        "on-primary": "#ffffff",
+                        "surface-variant": "#e0e3e5",
+                        "on-background": "#191c1e",
+                        "surface": "#f7f9fb",
+                        "surface-container-high": "#e6e8ea",
+                        "error-container": "#ffdad6"
+                    },
+                    fontFamily: {
+                        "headline": ["Plus Jakarta Sans"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+        }
+        .primary-gradient {
+            background: linear-gradient(135deg, #003178 0%, #0d47a1 100%);
+        }
+    </style>
+</head>
+<body class="flex min-h-screen flex-col bg-surface font-body text-on-surface selection:bg-secondary-fixed">
+    <header class="top-0 z-50 w-full bg-[#f7f9fb]">
+        <div class="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
+            <div class="flex items-center gap-2">
+                <a href="{{ url_for('index') }}" class="font-headline text-xl font-extrabold tracking-tighter text-[#003178]">Meu Bloco</a>
             </div>
-            <span class="status-pill">Novo usuario</span>
+            <div class="flex items-center gap-3">
+                <a class="px-4 py-2 font-semibold text-[#003178] transition-all hover:bg-[#e0e3e5]/50 active:scale-[0.99]" href="{{ url_for('login') }}">Login</a>
+                <a class="rounded-lg px-5 py-2 font-bold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98] primary-gradient" href="{{ url_for('register') }}">Criar conta</a>
+            </div>
         </div>
+        <div class="h-[1px] w-full bg-[#f2f4f6]"></div>
+    </header>
 
-        <form method="post" class="stack">
-            <label class="field">
-                <span>Nome de usuario</span>
-                <input type="text" name="username" autocomplete="username" minlength="3" placeholder="Usuario" required>
-            </label>
+    <main class="relative flex flex-grow items-center justify-center overflow-hidden px-6 py-12">
+        <div class="absolute right-[-5%] top-[-10%] h-96 w-96 rounded-full bg-secondary-fixed/10 blur-[100px]"></div>
+        <div class="absolute bottom-[-5%] left-[-5%] h-64 w-64 rounded-full bg-primary-fixed/20 blur-[80px]"></div>
 
-            <label class="field">
-                <span>Senha</span>
-                <input type="password" name="password" autocomplete="new-password" minlength="8" placeholder="Minimo de 8 caracteres" required>
-            </label>
+        <div class="relative z-10 w-full max-w-md">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <section class="mb-4 space-y-3" aria-live="polite">
+                        {% for category, message in messages %}
+                            <div class="rounded-xl border px-4 py-3 text-sm font-medium {% if category == 'error' %}border-error/20 bg-error-container text-on-error-container{% else %}border-secondary/20 bg-secondary-fixed/40 text-[#004e59]{% endif %}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    </section>
+                {% endif %}
+            {% endwith %}
 
-            <label class="field">
-                <span>Confirmar senha</span>
-                <input type="password" name="confirm_password" autocomplete="new-password" minlength="8" placeholder="Repita a senha" required>
-            </label>
+            <div class="overflow-hidden rounded-xl border border-outline-variant/10 bg-surface-container-lowest shadow-[0_20px_40px_rgba(0,49,120,0.06)]">
+                <div class="bg-surface-container-highest/30 px-8 py-10 text-center">
+                    <h1 class="mb-2 font-headline text-3xl font-extrabold tracking-tight text-primary">Criar conta</h1>
+                    <p class="text-sm font-medium text-on-surface-variant">Cadastre-se para comecar sua precisao clinica.</p>
+                </div>
 
-            <label class="field">
-                <span>Codigo gift card</span>
-                <input type="text" name="gift_card_code" autocomplete="off" placeholder="Opcional para testes">
-            </label>
+                <div class="space-y-8 p-8">
+                    <form method="post" class="space-y-6" data-register-form>
+                        <div class="space-y-1.5">
+                            <label class="ml-1 text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant" for="username">Nome de usuario</label>
+                            <div class="group relative">
+                                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-lg text-outline transition-colors group-focus-within:text-secondary">person</span>
+                                <input class="w-full rounded-t-lg border-0 border-b-2 border-outline-variant/30 bg-surface-container-low px-10 py-3 text-sm outline-none transition-all focus:border-secondary focus:ring-0" id="username" name="username" autocomplete="username" minlength="3" placeholder="Seu nome clinico" required type="text">
+                            </div>
+                        </div>
 
-            <button type="submit">Criar usuario</button>
-        </form>
+                        <div class="space-y-1.5">
+                            <div class="flex items-end justify-between">
+                                <label class="ml-1 text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant" for="password">Senha</label>
+                                <span class="text-[0.6rem] font-medium text-outline">Min. 8 caracteres</span>
+                            </div>
+                            <div class="group relative">
+                                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-lg text-outline transition-colors group-focus-within:text-secondary">lock</span>
+                                <input class="w-full rounded-t-lg border-0 border-b-2 border-outline-variant/30 bg-surface-container-low px-10 py-3 text-sm outline-none transition-all focus:border-secondary focus:ring-0" id="password" name="password" autocomplete="new-password" minlength="8" placeholder="••••••••" required type="password">
+                            </div>
+                        </div>
 
-        <p class="muted auth-link">Ja tem conta? <a href="{{ url_for('login') }}">Entrar</a></p>
-    </section>
-</section>
-{% endblock %}
+                        <div class="space-y-1.5">
+                            <label class="ml-1 text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant" for="confirm_password">Confirmar senha</label>
+                            <div class="group relative">
+                                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-lg text-outline transition-colors group-focus-within:text-secondary">shield_lock</span>
+                                <input class="w-full rounded-t-lg border-0 border-b-2 border-outline-variant/30 bg-surface-container-low px-10 py-3 text-sm outline-none transition-all focus:border-secondary focus:ring-0" id="confirm_password" name="confirm_password" autocomplete="new-password" minlength="8" placeholder="••••••••" required type="password">
+                            </div>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <label class="ml-1 text-[0.6875rem] font-bold uppercase tracking-widest text-on-surface-variant" for="gift_card_code">Codigo gift card (Opcional)</label>
+                            <div class="group relative">
+                                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-lg text-outline transition-colors group-focus-within:text-secondary">featured_seasonal_and_gifts</span>
+                                <input class="w-full rounded-t-lg border-0 border-b-2 border-outline-variant/30 bg-surface-container-low px-10 py-3 text-sm outline-none transition-all focus:border-secondary focus:ring-0" id="gift_card_code" name="gift_card_code" autocomplete="off" placeholder="XXXX-XXXX-XXXX" type="text">
+                            </div>
+                        </div>
+
+                        <button class="primary-gradient flex w-full items-center justify-center gap-2 rounded-xl py-4 text-base font-bold text-white shadow-lg shadow-primary/20 transition-all hover:scale-[1.01] hover:shadow-primary/30 active:scale-[0.98]" type="submit">
+                            Criar usuario
+                            <span class="material-symbols-outlined text-lg">arrow_forward</span>
+                        </button>
+                    </form>
+
+                    <div class="pt-4 text-center">
+                        <p class="text-sm font-medium text-on-surface-variant">
+                            Ja tem conta?
+                            <a class="ml-1 font-bold text-primary underline decoration-2 underline-offset-4 transition-all hover:underline" href="{{ url_for('login') }}">Entrar</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="flex w-full flex-col items-center justify-between gap-4 border-t border-[#c3c6d4]/15 bg-[#f2f4f6] px-6 py-8 md:flex-row">
+        <div class="text-xs font-medium uppercase tracking-widest text-[#003178]">© 2026 Meu Bloco.</div>
+        <div class="flex flex-wrap justify-center gap-6">
+            <a class="text-xs font-medium uppercase tracking-widest text-[#191c1e] underline decoration-2 underline-offset-4 transition-transform hover:-translate-y-[1px] hover:text-[#003178]" href="{{ url_for('index') }}">Inicio</a>
+            <a class="text-xs font-medium uppercase tracking-widest text-[#191c1e] underline decoration-2 underline-offset-4 transition-transform hover:-translate-y-[1px] hover:text-[#003178]" href="{{ url_for('login') }}">Login</a>
+            <a class="text-xs font-medium uppercase tracking-widest text-[#191c1e] underline decoration-2 underline-offset-4 transition-transform hover:-translate-y-[1px] hover:text-[#003178]" href="{{ url_for('register') }}">Suporte</a>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const form = document.querySelector("[data-register-form]");
+            const password = document.querySelector("#password");
+            const confirmPassword = document.querySelector("#confirm_password");
+
+            function validatePasswordMatch() {
+                if (!password || !confirmPassword) return;
+                if (confirmPassword.value && password.value !== confirmPassword.value) {
+                    confirmPassword.setCustomValidity("As senhas nao conferem.");
+                } else {
+                    confirmPassword.setCustomValidity("");
+                }
+            }
+
+            if (password && confirmPassword) {
+                password.addEventListener("input", validatePasswordMatch);
+                confirmPassword.addEventListener("input", validatePasswordMatch);
+            }
+
+            if (form) {
+                form.addEventListener("submit", () => {
+                    validatePasswordMatch();
+                });
+            }
+        });
+    </script>
+</body>
+</html>
