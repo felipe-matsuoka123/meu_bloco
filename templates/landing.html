@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <title>Meu Bloco: Seu Bloco de Notas Clinico</title>
+    <title>evolucao.ai: Seu Bloco de Notas Clinico</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
@@ -79,36 +79,28 @@
     <style>
         body { font-family: "Inter", sans-serif; }
         h1, h2, h3, h4 { font-family: "Plus Jakarta Sans", sans-serif; }
-        .material-symbols-outlined {
-            font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
-        }
+        .material-symbols-outlined { font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24; }
     </style>
 </head>
 <body class="bg-surface text-on-surface selection:bg-primary-fixed selection:text-on-primary-fixed">
-    <nav class="fixed top-0 z-50 flex w-full items-center justify-between border-b border-outline-variant/30 bg-[#f7f9fb] px-6 py-4 md:px-24">
-        <a href="{{ url_for('index') }}" class="text-xl font-bold tracking-tighter text-primary">Meu Bloco</a>
+    <nav class="fixed top-0 z-50 flex w-full items-center justify-between border-b border-outline-variant/30 bg-[#f7f9fb] px-8 py-4 md:px-24">
+        <div class="text-xl font-bold tracking-tighter text-primary">evolucao.ai</div>
         <div class="flex items-center gap-4">
             <a href="{{ url_for('login') }}" class="px-4 py-2 text-sm font-semibold text-primary">Login</a>
-            <a href="{{ url_for('register') }}" class="rounded bg-primary px-6 py-2 text-sm font-semibold text-white shadow-md transition-all active:scale-95">Comecar</a>
+            <a href="{{ url_for('register') }}" class="rounded bg-primary px-6 py-2 text-sm font-semibold text-white shadow-md transition-all active:scale-95">Começar</a>
         </div>
     </nav>
 
     <main class="pt-24">
         <section class="mx-auto max-w-4xl px-8 py-20 text-center md:px-24 md:py-32">
             <h1 class="mb-6 text-4xl font-extrabold leading-tight tracking-tight text-primary md:text-6xl">
-                Meu Bloco: seu bloco de notas clinico
+                evolucao.ai: seu bloco de notas clínico
             </h1>
-            <p class="mb-12 text-xl leading-relaxed text-on-surface-variant">
-                Registre, organize e revise anotacoes clinicas com mais clareza.
-                Menos atrito na rotina, mais foco no que importa.
-            </p>
+            <p class="mb-12 text-xl leading-relaxed text-on-surface-variant">Registre evoluções, revise pontos críticos com IA e transforme anotações soltas em resumos estruturados para a tomada de decisão.</p>
             <div class="flex flex-col justify-center gap-4 sm:flex-row">
                 <a href="{{ url_for('register') }}" class="flex items-center justify-center gap-2 rounded bg-primary px-10 py-4 text-lg font-bold text-white shadow-lg transition-opacity hover:opacity-90">
-                    Experimentar gratuitamente
+                    Experimentar Gratuitamente
                     <span class="material-symbols-outlined">arrow_forward</span>
-                </a>
-                <a href="{{ url_for('login') }}" class="flex items-center justify-center rounded border border-outline px-10 py-4 text-lg font-semibold text-on-surface transition-colors hover:bg-surface-container">
-                    Entrar
                 </a>
             </div>
         </section>
@@ -119,62 +111,117 @@
                 <div class="grid grid-cols-1 gap-12 text-center md:grid-cols-3">
                     <div class="flex flex-col items-center">
                         <div class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary-fixed text-primary">
-                            <span class="material-symbols-outlined text-3xl">edit_note</span>
+                            <span class="material-symbols-outlined text-3xl">content_paste</span>
                         </div>
-                        <h3 class="mb-3 text-xl font-bold">Escreva suas notas</h3>
-                        <p class="text-sm text-on-surface-variant">
-                            Registre evolucoes, observacoes e informacoes importantes sem complicar seu fluxo.
-                        </p>
+                        <h3 class="mb-3 text-xl font-bold">Cole suas notas</h3>
+                        <p class="text-sm text-on-surface-variant">Insira o relato bruto do atendimento ou suas anotações rápidas, sem precisar organizar tudo antes.</p>
                     </div>
                     <div class="flex flex-col items-center">
-                        <div class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary-fixed text-primary">
-                            <span class="material-symbols-outlined text-3xl">psychology</span>
+                        <div class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary-fixed text-secondary">
+                            <span class="material-symbols-outlined text-3xl text-primary">auto_awesome</span>
                         </div>
-                        <h3 class="mb-3 text-xl font-bold">Revise com apoio de IA</h3>
-                        <p class="text-sm text-on-surface-variant">
-                            Use a IA para revisar o conteudo e recuperar contexto com mais objetividade.
-                        </p>
+                        <h3 class="mb-3 text-xl font-bold">Revise com IA</h3>
+                        <p class="text-sm text-on-surface-variant">A IA destaca pontos para melhorar a clareza, informações faltando, perguntas em aberto, busca scores relevantes ao caso que podem ser aplicados e sugere temas objetivos de estudo.</p>
                     </div>
                     <div class="flex flex-col items-center">
-                        <div class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary-fixed text-primary">
-                            <span class="material-symbols-outlined text-3xl">picture_as_pdf</span>
+                        <div class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary-fixed text-tertiary">
+                            <span class="material-symbols-outlined text-3xl text-primary">table_chart</span>
                         </div>
-                        <h3 class="mb-3 text-xl font-bold">Exporte quando precisar</h3>
-                        <p class="text-sm text-on-surface-variant">
-                            Gere PDFs das anotacoes e mantenha uma saida simples para compartilhar ou arquivar.
-                        </p>
+                        <h3 class="mb-3 text-xl font-bold">Gere a tabela</h3>
+                        <p class="text-sm text-on-surface-variant">A IA resume cada anotação em HD, status atual, riscos ou pendências e plano, priorizando o que muda conduta.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-surface-container-lowest px-8 py-24 md:px-24">
+            <div class="mx-auto max-w-6xl">
+                <h2 class="mb-20 text-center text-3xl font-bold text-primary md:text-4xl">Passo a passo para sua produtividade</h2>
+                <div class="space-y-32">
+                    <div class="flex flex-col items-center gap-12 lg:flex-row">
+                        <div class="order-2 flex-1 lg:order-1">
+                            <div class="mb-4 inline-block rounded-full bg-primary-fixed px-4 py-1 text-sm font-bold text-primary">PASSO 1</div>
+                            <h3 class="mb-4 text-2xl font-bold">Registre sua nota</h3>
+                            <p class="mb-6 text-lg leading-relaxed text-on-surface-variant">Comece inserindo os detalhes do seu caso ou atendimento. Nossa interface limpa permite que você foque no conteúdo essencial, sem distrações. Basta preencher o título e descrever o ocorrido de forma livre.</p>
+                            <ul class="space-y-3">
+                                <li class="flex items-center gap-3 text-on-surface-variant">
+                                    <span class="material-symbols-outlined text-primary">check_circle</span>
+                                    Interface intuitiva para escrita rápida.
+                                </li>
+                                <li class="flex items-center gap-3 text-on-surface-variant">
+                                    <span class="material-symbols-outlined text-primary">check_circle</span>
+                                    Organização automática por títulos de casos.
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="order-1 flex-1 lg:order-2">
+                            <img alt="Interface de registro de nota" class="w-full rounded-xl border border-outline-variant/30 shadow-2xl" src="{{ url_for('image_asset', filename='escreva_sua_nota.png') }}">
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col items-center gap-12 lg:flex-row">
+                        <div class="flex-1">
+                            <img alt="Revisão com Inteligência Artificial" class="w-full rounded-xl border border-outline-variant/30 shadow-2xl" src="{{ url_for('image_asset', filename='revise_com_ia.png') }}">
+                        </div>
+                        <div class="flex-1">
+                            <div class="mb-4 inline-block rounded-full bg-primary-fixed px-4 py-1 text-sm font-bold text-primary">PASSO 2</div>
+                            <h3 class="mb-4 text-2xl font-bold">Revise e edite com IA</h3>
+                            <p class="mb-6 text-lg leading-relaxed text-on-surface-variant">A revisão foi desenhada para ser objetiva e rápida. Em vez de devolver texto genérico, a IA aponta o que falta, o que pode ser melhor esclarecido, quais dúvidas ainda impactam a conduta e quais scores valem considerar naquele contexto.</p>
+                            <div class="rounded-lg border-l-4 border-primary bg-primary/5 p-4">
+                                <p class="flex items-center gap-2 text-sm font-medium text-primary">
+                                    <span class="material-symbols-outlined text-sm">auto_awesome</span>
+                                    O que a IA revisa
+                                </p>
+                                <p class="mt-1 text-sm text-on-surface-variant">Clareza da evolução, informações faltando, perguntas em aberto, busca por scores relevantes ao caso e sugestão de temas curtos para estudo.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col items-center gap-12 lg:flex-row">
+                        <div class="order-2 flex-1 lg:max-w-[32%] lg:order-1">
+                            <div class="mb-4 inline-block rounded-full bg-primary-fixed px-4 py-1 text-sm font-bold text-primary">PASSO 3</div>
+                            <h3 class="mb-4 text-2xl font-bold">Gere a tabela de resumo</h3>
+                            <p class="mb-6 text-lg leading-relaxed text-on-surface-variant">Selecione as anotações que deseja incluir e deixe que o evolucao.ai gere uma tabela consolidada. A estrutura prioriza problema ativo, estado atual, riscos reais e plano resumido.</p>
+                            <div class="mt-6 grid grid-cols-1 gap-4">
+                                <div class="flex items-start gap-4">
+                                    <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary font-bold text-white">1</div>
+                                    <p class="pt-1 text-sm text-on-surface-variant">Selecione os registros na lista de anotações.</p>
+                                </div>
+                                <div class="flex items-start gap-4">
+                                    <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary font-bold text-white">2</div>
+                                    <p class="pt-1 text-sm text-on-surface-variant">A IA processa e cria uma tabela com HD, status hoje, riscos ou pendências e plano, sem repetir informação desnecessária.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="order-1 flex-1 lg:order-2 lg:max-w-[68%]">
+                            <img alt="Tabela final estruturada" class="w-full rounded-xl border border-outline-variant/30 shadow-2xl" src="{{ url_for('image_asset', filename='exemplo_tabela.png') }}">
+                        </div>
                     </div>
                 </div>
             </div>
         </section>
 
         <section class="mx-auto max-w-3xl px-8 py-24 text-center md:px-24">
-            <h2 class="mb-6 text-2xl font-bold text-on-surface md:text-3xl">Mais clareza para a rotina clinica</h2>
-            <p class="text-lg text-on-surface-variant">
-                O Meu Bloco foi pensado para reduzir a desorganizacao das anotacoes do dia a dia.
-                A interface e direta, o registro e rapido, e a revisao com IA entra como apoio pratico,
-                sem tentar substituir julgamento profissional.
-            </p>
+            <h2 class="mb-6 text-2xl font-bold text-on-surface md:text-3xl">Domine sua passagem de caso</h2>
+            <p class="text-lg text-on-surface-variant">Retome o controle sobre suas anotações clínicas com uma IA que filtra excesso de informação, destaca risco e ajuda a enxergar o que realmente importa para a decisão do plantão.</p>
         </section>
 
         <section class="bg-primary px-8 py-24 text-center text-white">
             <div class="mx-auto max-w-2xl">
                 <h2 class="mb-8 text-3xl font-extrabold md:text-4xl">Otimize sua rotina hoje</h2>
-                <p class="mb-10 text-lg opacity-90">
-                    Centralize suas anotacoes, revise com mais clareza e mantenha tudo acessivel em um so lugar.
-                </p>
-                <a href="{{ url_for('register') }}" class="inline-flex rounded bg-white px-12 py-5 text-xl font-bold text-primary shadow-xl transition-colors hover:bg-surface-bright">
-                    Comecar agora
+                <p class="mb-10 text-lg opacity-90">Simplifique sua evolução diária e passagem de caso com o evolucao.ai.</p>
+                <a href="{{ url_for('register') }}" class="rounded bg-white px-12 py-5 text-xl font-bold text-primary shadow-xl transition-colors hover:bg-surface-bright">
+                    Começar Agora
                 </a>
-                <p class="mt-6 text-sm opacity-70">Acesso imediato. Sem configuracao complexa.</p>
+                <p class="mt-6 text-sm opacity-70">Acesso imediato. Sem configuração complexa.</p>
             </div>
         </section>
     </main>
 
     <footer class="border-t border-outline-variant/30 bg-surface-container-high px-8 py-12 md:px-24">
         <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 md:flex-row">
-            <div class="text-lg font-bold text-primary">Meu Bloco</div>
-            <div class="text-xs text-on-surface-variant">© 2026 Meu Bloco.</div>
+            <div class="text-lg font-bold text-primary">evolucao.ai</div>
+            <div class="text-xs text-on-surface-variant">© 2024 evolucao.ai.</div>
             <div class="flex gap-6 text-xs text-on-surface-variant">
                 <a class="hover:text-primary" href="{{ url_for('login') }}">Privacidade</a>
                 <a class="hover:text-primary" href="{{ url_for('register') }}">Termos</a>

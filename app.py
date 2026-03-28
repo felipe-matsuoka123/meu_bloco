@@ -9,7 +9,7 @@ from pathlib import Path
 
 import bcrypt
 import stripe
-from flask import Flask, flash, redirect, render_template, request, send_file, session, url_for
+from flask import Flask, flash, redirect, render_template, request, send_file, send_from_directory, session, url_for
 from dotenv import load_dotenv
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase.pdfmetrics import stringWidth
@@ -26,6 +26,7 @@ except ImportError:
 
 BASE_DIR = Path(__file__).resolve().parent
 NAMES_CSV_PATH = BASE_DIR / "all-pt-br-names.csv"
+IMAGES_DIR = BASE_DIR / "images"
 load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
@@ -101,6 +102,13 @@ def stripe_checkout_ready() -> bool:
 
 def absolute_url(endpoint: str, **values: str) -> str:
     return url_for(endpoint, _external=True, **values)
+
+
+def safe_download_filename(title: str, fallback: str) -> str:
+    normalized = unicodedata.normalize("NFKD", title)
+    ascii_title = normalized.encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", ascii_title).strip("-").lower()
+    return slug or fallback
 
 
 def get_pending_registration() -> dict[str, str] | None:
@@ -680,6 +688,11 @@ def healthz():
     return {"ok": True}, 200
 
 
+@app.route("/images/<path:filename>", methods=["GET"])
+def image_asset(filename: str):
+    return send_from_directory(IMAGES_DIR, filename)
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -1130,11 +1143,14 @@ def download_note_pdf(note_id: int):
         flash("Anotacao nao encontrada.", "error")
         return redirect(url_for("notes"))
 
+    title = clean_assistant_text(str(note.get("title", ""))).strip()
+    filename = safe_download_filename(title, f"anotacao-{note_id}")
+
     return send_file(
         build_note_pdf(note),
         mimetype="application/pdf",
         as_attachment=True,
-        download_name=f"anotacao-{note_id}.pdf",
+        download_name=f"{filename}.pdf",
     )
 
 
