@@ -177,10 +177,10 @@ def set_selected_sbar_note_ids(selected_ids: list[int]) -> None:
     session["sbar_selected_note_ids"] = selected_ids
 
 
-def get_saved_sbar(user_id: int) -> tuple[list[int], list[dict[str, str | int]] | None]:
+def get_saved_sbar(user_id: int) -> tuple[list[int], list[dict[str, str | int]] | None, datetime | None]:
     saved_sbar = db.get_user_saved_sbar(user_id)
     if saved_sbar is None:
-        return [], None
+        return [], None, None
 
     raw_selected_ids = saved_sbar.get("selected_note_ids")
     selected_note_ids = (
@@ -191,7 +191,7 @@ def get_saved_sbar(user_id: int) -> tuple[list[int], list[dict[str, str | int]] 
 
     raw_rows = saved_sbar.get("rows")
     if not isinstance(raw_rows, list):
-        return selected_note_ids, None
+        return selected_note_ids, None, None
 
     rows: list[dict[str, str | int]] = []
     for item in raw_rows:
@@ -211,7 +211,9 @@ def get_saved_sbar(user_id: int) -> tuple[list[int], list[dict[str, str | int]] 
             }
         )
 
-    return selected_note_ids, rows or None
+    updated_at = saved_sbar.get("updated_at")
+    normalized_updated_at = updated_at if isinstance(updated_at, datetime) else None
+    return selected_note_ids, rows or None, normalized_updated_at
 
 
 def get_editing_note_id(notes_list: list[dict]) -> int | None:
@@ -1067,7 +1069,7 @@ def logout():
 def notes():
     review_output = session.pop("review_output", None)
     user_id = current_user_id()
-    saved_sbar_note_ids, saved_sbar_output = get_saved_sbar(user_id)
+    saved_sbar_note_ids, saved_sbar_output, saved_sbar_updated_at = get_saved_sbar(user_id)
     sbar_output = saved_sbar_output
     notes_list = db.list_user_notes(user_id)
     note_map = get_note_map(notes_list)
@@ -1213,6 +1215,7 @@ def notes():
         review_counts=review_counts,
         review_output=review_output,
         sbar_output=sbar_output,
+        sbar_generated_at=saved_sbar_updated_at,
     )
 
 

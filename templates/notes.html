@@ -342,6 +342,11 @@
                             <div>
                                 <p class="text-[10px] font-bold uppercase tracking-widest text-secondary">Resultado</p>
                                 <h3 class="font-headline text-xl font-bold text-primary">Tabela editável</h3>
+                                {% if sbar_generated_at %}
+                                    <p class="mt-1 text-xs text-on-surface-variant">
+                                        Gerada em {{ sbar_generated_at.strftime("%d/%m/%Y %H:%M") }}
+                                    </p>
+                                {% endif %}
                             </div>
                             <div class="flex flex-wrap gap-3">
                                 <form method="post">
