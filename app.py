@@ -2,6 +2,7 @@ import os
 import re
 import unicodedata
 import json
+import logging
 import signal
 import threading
 from datetime import date, datetime, timedelta, timezone
@@ -32,6 +33,7 @@ IMAGES_DIR = BASE_DIR / "images"
 load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
+logger = logging.getLogger(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me-for-production")
 app.config["DATABASE_URL"] = os.environ.get(
     "DATABASE_URL",
@@ -241,6 +243,25 @@ def _handle_gemini_alarm(_signum, _frame) -> None:
     raise GeminiRequestTimeoutError
 
 
+def classify_gemini_error(exc: Exception) -> str:
+    message = str(exc).lower()
+    if "timeout" in message or "timed out" in message:
+        return "request_timeout"
+    if "api key" in message or "api_key" in message or "401" in message or "403" in message:
+        return "auth_failed"
+    if "ssl" in message or "certificate" in message:
+        return "ssl_failed"
+    if "dns" in message or "name or service not known" in message or "temporary failure in name resolution" in message:
+        return "dns_failed"
+    return "request_failed"
+
+
+def raise_gemini_request_error(exc: Exception) -> None:
+    error_code = classify_gemini_error(exc)
+    logger.exception("Gemini request failed (%s): %s", error_code, exc)
+    raise RuntimeError(error_code) from exc
+
+
 def generate_gemini_content(client, prompt: str):
     timeout_seconds = max(1, int(app.config["GEMINI_TIMEOUT_SECONDS"]))
     if threading.current_thread() is not threading.main_thread():
@@ -251,7 +272,7 @@ def generate_gemini_content(client, prompt: str):
                 config={"temperature": app.config["GEMINI_TEMPERATURE"]},
             )
         except Exception as exc:
-            raise RuntimeError("request_failed") from exc
+            raise_gemini_request_error(exc)
 
     previous_handler = signal.getsignal(signal.SIGALRM)
     signal.signal(signal.SIGALRM, _handle_gemini_alarm)
@@ -265,7 +286,7 @@ def generate_gemini_content(client, prompt: str):
     except GeminiRequestTimeoutError:
         raise RuntimeError("request_timeout") from None
     except Exception as exc:
-        raise RuntimeError("request_failed") from exc
+        raise_gemini_request_error(exc)
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, previous_handler)
@@ -1058,6 +1079,12 @@ def notes():
                         flash("Defina a variavel GEMINI_API_KEY para ativar o assistente.", "error")
                     elif str(exc) == "request_timeout":
                         flash("O Gemini demorou demais para responder. Tente novamente.", "error")
+                    elif str(exc) == "auth_failed":
+                        flash("Falha de autenticacao no Gemini. Verifique a GEMINI_API_KEY do ambiente.", "error")
+                    elif str(exc) == "ssl_failed":
+                        flash("Falha SSL ao conectar com o Gemini no ambiente implantado.", "error")
+                    elif str(exc) == "dns_failed":
+                        flash("Falha de DNS ao conectar com o Gemini no ambiente implantado.", "error")
                     elif str(exc) == "request_failed":
                         flash("A consulta ao Gemini falhou por erro de rede ou servico.", "error")
                     elif str(exc) == "empty_response":
@@ -1091,6 +1118,12 @@ def notes():
                         flash("Defina a variavel GEMINI_API_KEY para ativar o assistente.", "error")
                     elif str(exc) == "request_timeout":
                         flash("O Gemini demorou demais para responder. Tente novamente.", "error")
+                    elif str(exc) == "auth_failed":
+                        flash("Falha de autenticacao no Gemini. Verifique a GEMINI_API_KEY do ambiente.", "error")
+                    elif str(exc) == "ssl_failed":
+                        flash("Falha SSL ao conectar com o Gemini no ambiente implantado.", "error")
+                    elif str(exc) == "dns_failed":
+                        flash("Falha de DNS ao conectar com o Gemini no ambiente implantado.", "error")
                     elif str(exc) == "request_failed":
                         flash("A consulta ao Gemini falhou por erro de rede ou servico.", "error")
                     elif str(exc) == "empty_response":
@@ -1214,6 +1247,12 @@ def review_note(note_id: int):
             return {"ok": False, "error": "Defina a variavel GEMINI_API_KEY para ativar o assistente."}, 500
         if str(exc) == "request_timeout":
             return {"ok": False, "error": "O Gemini demorou demais para responder. Tente novamente."}, 504
+        if str(exc) == "auth_failed":
+            return {"ok": False, "error": "Falha de autenticacao no Gemini. Verifique a GEMINI_API_KEY do ambiente."}, 502
+        if str(exc) == "ssl_failed":
+            return {"ok": False, "error": "Falha SSL ao conectar com o Gemini no ambiente implantado."}, 502
+        if str(exc) == "dns_failed":
+            return {"ok": False, "error": "Falha de DNS ao conectar com o Gemini no ambiente implantado."}, 502
         if str(exc) == "request_failed":
             return {"ok": False, "error": "A consulta ao Gemini falhou por erro de rede ou servico."}, 502
         if str(exc) == "empty_response":
