@@ -5,6 +5,7 @@ import json
 import logging
 import signal
 import threading
+import time
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache, wraps
 from io import BytesIO
@@ -42,6 +43,8 @@ app.config["DATABASE_URL"] = os.environ.get(
 app.config["GEMINI_MODEL"] = os.environ.get("GEMINI_MODEL", "gemini-3-flash-preview")
 app.config["GEMINI_TEMPERATURE"] = float(os.environ.get("GEMINI_TEMPERATURE", "0.0"))
 app.config["GEMINI_TIMEOUT_SECONDS"] = int(os.environ.get("GEMINI_TIMEOUT_SECONDS", "20"))
+app.config["SBAR_BATCH_SIZE"] = int(os.environ.get("SBAR_BATCH_SIZE", "3"))
+app.config["SBAR_BATCH_DELAY_SECONDS"] = float(os.environ.get("SBAR_BATCH_DELAY_SECONDS", "1.0"))
 app.config["MAX_LOGIN_ATTEMPTS"] = 5
 app.config["LOGIN_LOCKOUT_MINUTES"] = 15
 app.config["STRIPE_SECRET_KEY"] = os.environ.get("STRIPE_SECRET_KEY", "")
@@ -592,8 +595,51 @@ def parse_sbar_item(item: dict, note: dict) -> dict[str, str | int]:
     }
 
 
-def ask_gemini_for_single_sbar_row(client, note: dict, current_date: str) -> dict[str, str | int]:
-    prompt = build_sbar_prompt([note], current_date)
+def parse_sbar_response_for_notes(parsed: object, notes_list: list[dict]) -> list[dict[str, str | int]]:
+    if isinstance(parsed, dict):
+        for key in ("rows", "items", "data", "output", "result"):
+            candidate = parsed.get(key)
+            if isinstance(candidate, list):
+                parsed = candidate
+                break
+
+    if isinstance(parsed, dict):
+        if len(notes_list) != 1:
+            raise RuntimeError("invalid_json")
+        return [parse_sbar_item(parsed, notes_list[0])]
+
+    if not isinstance(parsed, list) or len(parsed) != len(notes_list):
+        raise RuntimeError("invalid_json")
+
+    parsed_by_note_id: dict[int, dict] = {}
+    for item in parsed:
+        if not isinstance(item, dict):
+            raise RuntimeError("invalid_json")
+
+        raw_note_id = item.get("note_id")
+        if isinstance(raw_note_id, int):
+            note_id = raw_note_id
+        elif isinstance(raw_note_id, str) and raw_note_id.strip().isdigit():
+            note_id = int(raw_note_id.strip())
+        else:
+            raise RuntimeError("invalid_json")
+
+        parsed_by_note_id[note_id] = item
+
+    if len(parsed_by_note_id) != len(notes_list):
+        raise RuntimeError("invalid_json")
+
+    rows: list[dict[str, str | int]] = []
+    for note in notes_list:
+        item = parsed_by_note_id.get(int(note["id"]))
+        if item is None:
+            raise RuntimeError("invalid_json")
+        rows.append(parse_sbar_item(item, note))
+    return rows
+
+
+def ask_gemini_for_sbar_batch_rows(client, notes_list: list[dict], current_date: str) -> list[dict[str, str | int]]:
+    prompt = build_sbar_prompt(notes_list, current_date)
     response = generate_gemini_content(client, prompt)
     text = getattr(response, "text", None)
     if not text:
@@ -604,20 +650,7 @@ def ask_gemini_for_single_sbar_row(client, note: dict, current_date: str) -> dic
     except (json.JSONDecodeError, RuntimeError):
         raise RuntimeError("invalid_json") from None
 
-    if isinstance(parsed, dict):
-        for key in ("rows", "items", "data", "output", "result"):
-            candidate = parsed.get(key)
-            if isinstance(candidate, list):
-                parsed = candidate
-                break
-
-    if isinstance(parsed, dict):
-        return parse_sbar_item(parsed, note)
-
-    if not isinstance(parsed, list) or len(parsed) != 1 or not isinstance(parsed[0], dict):
-        raise RuntimeError("invalid_json")
-
-    return parse_sbar_item(parsed[0], note)
+    return parse_sbar_response_for_notes(parsed, notes_list)
 
 
 def ask_gemini_for_sbar_rows(notes_list: list[dict]) -> list[dict[str, str | int]]:
@@ -630,9 +663,14 @@ def ask_gemini_for_sbar_rows(notes_list: list[dict]) -> list[dict[str, str | int
 
     client = genai.Client(api_key=api_key)
     current_date = date.today().isoformat()
+    batch_size = max(1, int(app.config["SBAR_BATCH_SIZE"]))
+    batch_delay_seconds = max(0.0, float(app.config["SBAR_BATCH_DELAY_SECONDS"]))
     rows: list[dict[str, str | int]] = []
-    for note in notes_list:
-        rows.append(ask_gemini_for_single_sbar_row(client, note, current_date))
+    for index in range(0, len(notes_list), batch_size):
+        batch_notes = notes_list[index : index + batch_size]
+        rows.extend(ask_gemini_for_sbar_batch_rows(client, batch_notes, current_date))
+        if index + batch_size < len(notes_list) and batch_delay_seconds:
+            time.sleep(batch_delay_seconds)
     return rows
 
 
