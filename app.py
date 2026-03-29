@@ -611,6 +611,9 @@ def ask_gemini_for_single_sbar_row(client, note: dict, current_date: str) -> dic
                 parsed = candidate
                 break
 
+    if isinstance(parsed, dict):
+        return parse_sbar_item(parsed, note)
+
     if not isinstance(parsed, list) or len(parsed) != 1 or not isinstance(parsed[0], dict):
         raise RuntimeError("invalid_json")
 
