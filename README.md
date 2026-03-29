@@ -111,6 +111,8 @@ Use the HTTPS forwarding URL from `ngrok` to access the app remotely.
 - Notes belong to the logged-in user only.
 - The review tool lives in the notes sidebar and only uses the notes you select as context.
 - Each note can be exported locally as a PDF.
-- The default Gemini model is `gemini-2.5-flash-lite` and can be changed with `GEMINI_MODEL`.
+- The default Gemini model is `gemini-3-flash-preview` and can be changed with `GEMINI_MODEL`.
+- Gemini requests time out after 20 seconds by default; override with `GEMINI_TIMEOUT_SECONDS`.
+- Gunicorn uses a 45-second worker timeout by default in the `Procfile`; override with `GUNICORN_TIMEOUT`.
 - PostgreSQL tables are created automatically on startup from [schema.sql](/home/felipe/projects/meu_bloco/schema.sql).
 - For any public exposure, set a strong `SECRET_KEY` first.

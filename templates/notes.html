@@ -190,8 +190,18 @@
                 white-space: pre-wrap !important;
                 word-break: break-word !important;
             }
+            .print-date {
+                display: block !important;
+                margin: 0 0 10px 0 !important;
+                font-size: 11px !important;
+                font-weight: 600 !important;
+                color: #111827 !important;
+            }
         }
         .table-print-text {
+            display: none;
+        }
+        .print-date {
             display: none;
         }
         .flash-message {
@@ -235,10 +245,12 @@
         <header class="mb-10 flex flex-col gap-5 md:mb-12 md:flex-row md:items-end md:justify-between no-print">
             <div>
                 <h2 class="mb-2 font-headline text-3xl font-extrabold tracking-tight text-primary">{% if active_tab == 'sbar' %}Tabela de passagem{% else %}Suas anotações{% endif %}</h2>
-                <p class="flex items-center gap-2 text-sm text-on-surface-variant">
-                    <span class="h-2 w-2 rounded-full bg-secondary"></span>
-                    {% if active_tab == 'sbar' %}Gere resumos por anotação e ajuste a tabela final{% else %}Ambiente clínico seguro • Sincronizado em tempo real{% endif %}
-                </p>
+                {% if active_tab == 'sbar' %}
+                    <p class="flex items-center gap-2 text-sm text-on-surface-variant">
+                        <span class="h-2 w-2 rounded-full bg-secondary"></span>
+                        Gere resumos por anotação e ajuste a tabela final
+                    </p>
+                {% endif %}
             </div>
             <div class="flex items-center gap-4">
                 <p class="text-sm font-medium text-on-surface-variant">Logado como {{ session["username"] }}</p>
@@ -323,9 +335,9 @@
         </section>
 
         <section>
-            {% if sbar_output %}
-                <div class="print-area overflow-hidden rounded-xl bg-surface-container-lowest shadow-[0_20px_40px_rgba(0,49,120,0.06)]">
-                    <div class="border-b border-outline-variant/20 p-6">
+	            {% if sbar_output %}
+	                <div class="print-area overflow-hidden rounded-xl bg-surface-container-lowest shadow-[0_20px_40px_rgba(0,49,120,0.06)]">
+	                    <div class="border-b border-outline-variant/20 p-6">
                         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between no-print">
                             <div>
                                 <p class="text-[10px] font-bold uppercase tracking-widest text-secondary">Resultado</p>
@@ -340,14 +352,15 @@
                                 <button class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-container" data-print-sbar type="button">Imprimir</button>
                             </div>
                         </div>
-                    </div>
+	                    </div>
 
-                    <form method="post" class="p-6" data-autosave-sbar-form data-autosave-url="{{ url_for('autosave_sbar') }}">
-                        <input type="hidden" name="form_name" value="save_sbar">
-                        <input type="hidden" name="active_tab" value="sbar">
+	                    <form method="post" class="p-6" data-autosave-sbar-form data-autosave-url="{{ url_for('autosave_sbar') }}">
+	                        <input type="hidden" name="form_name" value="save_sbar">
+	                        <input type="hidden" name="active_tab" value="sbar">
+                            <p class="print-date" data-print-date></p>
 
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full table-auto border-separate border-spacing-0">
+	                        <div class="overflow-x-auto">
+	                            <table class="min-w-full table-auto border-separate border-spacing-0">
                                 <thead>
                                     <tr class="text-left">
                                         <th class="border-b border-outline-variant/20 px-3 py-3 text-xs font-bold uppercase tracking-widest text-outline">ID</th>
@@ -665,6 +678,7 @@
             });
 
             const collapsedNotes = loadCollapsedNotes();
+            const hasCollapsedPreference = collapsedNotes.size > 0;
 
             document.querySelectorAll("[data-autosave-note-form]").forEach(function (form) {
                 const titleInput = form.querySelector("[data-autosave-note-title]");
@@ -704,7 +718,7 @@
                 if (reviewOutput) {
                     autosizeTextarea(reviewOutput);
                 }
-                applyCollapsedState(collapsedNotes.has(noteId));
+                applyCollapsedState(hasCollapsedPreference ? collapsedNotes.has(noteId) : true);
 
                 let lastSavedSnapshot = JSON.stringify({
                     title: titleInput.value,
@@ -927,15 +941,24 @@
                 });
             }
 
+            function syncPrintDate() {
+                const printDate = document.querySelector("[data-print-date]");
+                if (printDate) {
+                    printDate.textContent = "Data: " + new Date().toLocaleDateString("pt-BR");
+                }
+            }
+
             const printButton = document.querySelector("[data-print-sbar]");
             if (printButton) {
                 printButton.addEventListener("click", function () {
                     syncPrintTableText();
+                    syncPrintDate();
                     window.print();
                 });
             }
 
             window.addEventListener("beforeprint", syncPrintTableText);
+            window.addEventListener("beforeprint", syncPrintDate);
         });
     </script>
 </body>

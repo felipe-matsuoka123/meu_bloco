@@ -2,6 +2,8 @@ import os
 import re
 import unicodedata
 import json
+import signal
+import threading
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache, wraps
 from io import BytesIO
@@ -37,6 +39,7 @@ app.config["DATABASE_URL"] = os.environ.get(
 )
 app.config["GEMINI_MODEL"] = os.environ.get("GEMINI_MODEL", "gemini-3-flash-preview")
 app.config["GEMINI_TEMPERATURE"] = float(os.environ.get("GEMINI_TEMPERATURE", "0.0"))
+app.config["GEMINI_TIMEOUT_SECONDS"] = int(os.environ.get("GEMINI_TIMEOUT_SECONDS", "20"))
 app.config["MAX_LOGIN_ATTEMPTS"] = 5
 app.config["LOGIN_LOCKOUT_MINUTES"] = 15
 app.config["STRIPE_SECRET_KEY"] = os.environ.get("STRIPE_SECRET_KEY", "")
@@ -230,6 +233,44 @@ def build_notes_context(notes_list: list[dict]) -> str:
     return "\n".join(formatted_notes)
 
 
+class GeminiRequestTimeoutError(TimeoutError):
+    pass
+
+
+def _handle_gemini_alarm(_signum, _frame) -> None:
+    raise GeminiRequestTimeoutError
+
+
+def generate_gemini_content(client, prompt: str):
+    timeout_seconds = max(1, int(app.config["GEMINI_TIMEOUT_SECONDS"]))
+    if threading.current_thread() is not threading.main_thread():
+        try:
+            return client.models.generate_content(
+                model=app.config["GEMINI_MODEL"],
+                contents=prompt,
+                config={"temperature": app.config["GEMINI_TEMPERATURE"]},
+            )
+        except Exception as exc:
+            raise RuntimeError("request_failed") from exc
+
+    previous_handler = signal.getsignal(signal.SIGALRM)
+    signal.signal(signal.SIGALRM, _handle_gemini_alarm)
+    signal.setitimer(signal.ITIMER_REAL, timeout_seconds)
+    try:
+        return client.models.generate_content(
+            model=app.config["GEMINI_MODEL"],
+            contents=prompt,
+            config={"temperature": app.config["GEMINI_TEMPERATURE"]},
+        )
+    except GeminiRequestTimeoutError:
+        raise RuntimeError("request_timeout") from None
+    except Exception as exc:
+        raise RuntimeError("request_failed") from exc
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
+
+
 def ask_gemini_for_medical_review(notes_list: list[dict]) -> str:
     if genai is None:
         raise RuntimeError("sdk_missing")
@@ -315,11 +356,7 @@ Anotacoes do usuario:
 {notes_context}
 """.strip()
 
-    response = client.models.generate_content(
-        model=app.config["GEMINI_MODEL"],
-        contents=prompt,
-        config={"temperature": app.config["GEMINI_TEMPERATURE"]},
-    )
+    response = generate_gemini_content(client, prompt)
     text = getattr(response, "text", None)
     if not text:
         raise RuntimeError("empty_response")
@@ -352,14 +389,20 @@ def extract_json_payload(text: str) -> str:
     if fenced_match:
         candidate = fenced_match.group(1).strip()
 
-    start = candidate.find("[")
-    end = candidate.rfind("]")
-    if start != -1 and end != -1 and end > start:
-        return candidate[start : end + 1]
+    list_start = candidate.find("[")
+    list_end = candidate.rfind("]")
+    if list_start != -1 and list_end != -1 and list_end > list_start:
+        return candidate[list_start : list_end + 1]
+
+    object_start = candidate.find("{")
+    object_end = candidate.rfind("}")
+    if object_start != -1 and object_end != -1 and object_end > object_start:
+        return candidate[object_start : object_end + 1]
     raise RuntimeError("invalid_json")
 
 
 def build_sbar_prompt(notes_list: list[dict], current_date: str) -> str:
+    expected_note_ids = ", ".join(str(int(note["id"])) for note in notes_list)
     prompt = f"""
 Voce e um medico organizando uma passagem de caso para plantao.
 
@@ -371,15 +414,19 @@ IMPORTANTE:
 O texto pode conter excesso de informacoes, multiplos exames e eventos ao longo do tempo.
 Sua tarefa e filtrar e organizar apenas o que impacta a conduta atual.
 Nao adicione nenhuma informacao que nao esteja escrita no prontuario original
+Prefira uma passagem util para o proximo plantonista, mesmo que fique um pouco mais detalhada.
 
 Analise apenas as anotacoes fornecidas.
 Escreva em portugues do Brasil.
 Retorne exatamente um JSON valido contendo uma lista.
 Cada item da lista deve corresponder a uma anotacao de entrada.
+Retorne exatamente {len(notes_list)} itens.
+Use obrigatoriamente estes note_id, sem alterar ordem nem omitir nenhum: [{expected_note_ids}]
 Nao inclua markdown, explicacoes, comentarios ou texto fora do JSON.
 Use esta estrutura exata em cada item:
 {{
   "note_id": 123,
+  "paciente": "...",
   "hd": "...",
   "status_hoje": "...",
   "riscos_pendencias": "...",
@@ -388,6 +435,7 @@ Use esta estrutura exata em cada item:
 
 Estruture a saida nos seguintes campos:
 
+Paciente:
 HD:
 Status hoje:
 Riscos / Pendencias:
@@ -395,20 +443,46 @@ Plano:
 
 DEFINICOES:
 
+Paciente:
+- Preencha com dados de identificacao clinicamente uteis do paciente
+- Inclua tudo que ajude a identificar o caso, exceto nomes
+- Pode incluir sexo, idade, leito, enfermaria, numero do prontuario, procedencia ou servico, se estiverem escritos
+- Se estiver disponivel, priorize: idade, comorbidades relevantes, medicacoes de uso continuo, internacoes previas, alergias, historico familiar/social relevante e data de internacao hospitalar
+- Sempre sinalize cada dado com rotulo curto e claro, por exemplo: "Idade: 67a. MUC: anlodipino, metformina. DIH: 14/03."
+- Use abreviacoes clinicas usuais quando fizer sentido, incluindo "MUC" e "DIH"
+- Quando listar comorbidades, use explicitamente o rotulo "Comorbidades:"
+- Nao jogue informacoes soltas sem identificar o que cada uma representa
+- Nao invente identificadores ausentes
+- Nao repetir aqui informacoes que ja serao melhor descritas em HD, Status hoje, Riscos / Pendencias ou Plano
+- Esta coluna deve servir para identificar o paciente/caso, nao para resumir a evolucao clinica
+- Leito/localizacao podem ser incluidos aqui quando ajudarem na identificacao do caso
+- Se houver antecedentes pessoais relevantes e estaveis, prefira mantê-los aqui: AP, MUC, alergias, internacoes previas, historico familiar/social relevante e DIH
+
 HD:
 - Diagnostico principal
 - Complicacoes associadas relacionadas ao diagnóstico central
 - Contexto clinico essencial (ex: tempo de internacao, eventos relevantes)
 - Incluir temporalidade quando disponivel (ex: D5 de internacao, evento em 10/03)
-- NAO incluir exames detalhados ou lista extensa de achados
+- Incluir procedimentos relevantes, culturas positivas, cirurgias ou eventos marcantes quando mudarem entendimento do caso
+- Nao incluir lista extensa de exames antigos, mas manter achados objetivos essenciais
+- Incluir HMA concisa e cronologica quando ela for necessaria para entender por que o paciente internou
+- Resumir a admissao no pronto socorro quando isso for relevante para o caso atual
+- Se relevante, incluir na HD: exame fisico de admissao, exames laboratoriais/de imagem de admissao, diagnosticos de admissao e plano inicial
+- Se houver intercorrencias relevantes durante a internacao, incorporar a linha geral dessas mudancas aqui
 
 Status hoje:
 - Estado atual do paciente (momento da avaliacao mais recente)
 - Exame Físico atual (focar nas alteracoes)
 - Nivel de consciencia, estabilidade hemodinamica e respiratoria
 - Medicacoes importantes em uso (ex: antibiotico com dia de tratamento, anticoagulacao, antiagregantes)
+- Dispositivos e suportes atuais quando relevantes (ex: O2, VM, DVA, dreno, SNE, diurese, acesso)
+- Exames recentes que mudam a conduta atual, com valor resumido quando houver (ex: Hb 6,8 em 28/03; Cr 2,1 hoje)
 - Incluir referencia temporal se relevante (ex: "hoje", "ultimas 24h")
 - NAO incluir dados normais sem impacto
+- Este campo representa a evolucao do dia e deve responder a conduta do dia anterior
+- Incluir sinais de resposta ao tratamento, sinais de melhora/piora clinica e mudancas importantes nas ultimas 24h
+- Se alterados ou relevantes, incluir sinais vitais, diurese, evacuacao e outros marcadores objetivos do dia
+- Incluir exame fisico objetivo atual e exames complementares relevantes do dia
 
 Riscos / Pendencias:
 - Problemas ainda nao resolvidos
@@ -416,20 +490,28 @@ Riscos / Pendencias:
 - Riscos reais de deterioracao
 - Incluir contexto temporal quando aplicavel (ex: "desde 21/03", "aguardando desde admissao")
 - Quando incluir exames, citar data
+- Incluir o que precisa ser vigiado no plantao e quais resultados ainda podem mudar conduta
+- Incluir avaliacoes complementares importantes pendentes, como pareceres de especialidades e exames que ainda podem redefinir a conduta
+- Se houve intercorrencias na internacao que ainda tenham impacto, destacar aqui como risco ou pendencia ativa
 
 Plano:
 - Condutas principais (resumidas)
 - Incluir acoes futuras relevantes (ex: na alta, apos avaliacao)
-- NAO listar conduta em formato extenso ou checklist
+- Incluir proximo passo pratico e gatilhos de reavaliacao quando estiverem descritos
+- Nao listar checklist longo, mas deixar claro o rumo da conduta
+- Incluir as acoes imediatas e pontuais do plantao atual
+- Incluir tambem o plano terapeutico de medio/longo prazo, incluindo estrategia de enfermaria e planejamento de alta se estiverem descritos
 
 REGRAS CRITICAS:
 - Nao repetir informacao entre campos!
 - NAO copiar a evolucao original
-- Resumir agressivamente
+- Resumir com densidade informativa alta
 - NAO listar exames irrelevantes ou antigos
 - Sempre priorizar informacao recente sobre antiga
 - Sempre explicitar estabilidade ou instabilidade do paciente
 - NAO inventar informacoes ausentes
+- Se houver poucos dados, seja breve; se houver dados decisivos, preserve-os
+- Prefira frases curtas, mas cada campo deve ficar completo o suficiente para orientar o plantao
 
 REGRAS DE TEMPORALIDADE (ESSENCIAL):
 - Sempre que houver datas, utilize-as para organizar o raciocinio clinico
@@ -445,10 +527,21 @@ HEURISTICAS DE FILTRAGEM:
 - Se multiplos exames: usar apenas o que muda decisao
 - Conduta longa -> resumir em intencao clinica
 
+DETALHES QUE VALEM A PENA MANTER:
+- Data de internacao, D de tratamento, antibiotico em curso e dia do esquema
+- Mudancas recentes importantes nas ultimas 24-72h
+- Exames ou imagens anormais que sustentam a decisao atual
+- Parecer pendente ou procedimento programado
+- Critério de alta, transferência ou necessidade de reabordagem, se estiver descrito
+- Leito/localizacao quando ajudarem a identificar o paciente
+- Dados relevantes da admissao no pronto socorro quando ainda explicarem o estado atual
+- Intercorrencias importantes desde a admissao
+
 Antes de responder, identifique mentalmente:
 1. principal problema ativo
 2. maior risco atual
 3. decisao mais importante do plantao
+4. o que pertence a identificacao, ao historico do caso, ao estado atual, ao risco pendente e ao plano
 
 Anotacoes:
 {build_sbar_context(notes_list)}
@@ -456,38 +549,20 @@ Anotacoes:
     return prompt
 
 
-def ask_gemini_for_single_sbar_row(client, note: dict, current_date: str) -> dict[str, str | int]:
-    prompt = build_sbar_prompt([note], current_date)
-
-    response = client.models.generate_content(
-        model=app.config["GEMINI_MODEL"],
-        contents=prompt,
-        config={"temperature": app.config["GEMINI_TEMPERATURE"]},
-    )
-    text = getattr(response, "text", None)
-    if not text:
-        raise RuntimeError("empty_response")
-
-    try:
-        parsed = json.loads(extract_json_payload(text))
-    except (json.JSONDecodeError, RuntimeError):
-        raise RuntimeError("invalid_json") from None
-
-    if not isinstance(parsed, list):
-        raise RuntimeError("invalid_json")
-
-    if len(parsed) != 1 or not isinstance(parsed[0], dict):
-        raise RuntimeError("invalid_json")
-
-    item = parsed[0]
+def parse_sbar_item(item: dict, note: dict) -> dict[str, str | int]:
     raw_note_id = item.get("note_id")
-    note_id = int(raw_note_id) if isinstance(raw_note_id, int) else None
+    if isinstance(raw_note_id, int):
+        note_id = raw_note_id
+    elif isinstance(raw_note_id, str) and raw_note_id.strip().isdigit():
+        note_id = int(raw_note_id.strip())
+    else:
+        note_id = None
     if note_id != int(note["id"]):
         raise RuntimeError("invalid_json")
 
     return {
         "note_id": note_id,
-        "paciente": "",
+        "paciente": clean_assistant_text(str(item.get("paciente", ""))),
         "hd": clean_assistant_text(str(item.get("hd", "Nao informado."))) or "Nao informado.",
         "status_hoje": clean_assistant_text(str(item.get("status_hoje", "Nao informado."))) or "Nao informado.",
         "riscos_pendencias": clean_assistant_text(str(item.get("riscos_pendencias", "Nao informado."))) or "Nao informado.",
@@ -505,7 +580,52 @@ def ask_gemini_for_sbar_rows(notes_list: list[dict]) -> list[dict[str, str | int
 
     client = genai.Client(api_key=api_key)
     current_date = date.today().isoformat()
-    return [ask_gemini_for_single_sbar_row(client, note, current_date) for note in notes_list]
+    prompt = build_sbar_prompt(notes_list, current_date)
+
+    response = generate_gemini_content(client, prompt)
+    text = getattr(response, "text", None)
+    if not text:
+        raise RuntimeError("empty_response")
+
+    try:
+        parsed = json.loads(extract_json_payload(text))
+    except (json.JSONDecodeError, RuntimeError):
+        raise RuntimeError("invalid_json") from None
+
+    if isinstance(parsed, dict):
+        for key in ("rows", "items", "data", "output", "result"):
+            candidate = parsed.get(key)
+            if isinstance(candidate, list):
+                parsed = candidate
+                break
+
+    if not isinstance(parsed, list) or len(parsed) != len(notes_list):
+        raise RuntimeError("invalid_json")
+
+    parsed_by_note_id: dict[int, dict] = {}
+    for item in parsed:
+        if not isinstance(item, dict):
+            raise RuntimeError("invalid_json")
+        raw_note_id = item.get("note_id")
+        if isinstance(raw_note_id, int):
+            note_id = raw_note_id
+        elif isinstance(raw_note_id, str) and raw_note_id.strip().isdigit():
+            note_id = int(raw_note_id.strip())
+        else:
+            raise RuntimeError("invalid_json")
+        parsed_by_note_id[note_id] = item
+
+    if len(parsed_by_note_id) != len(notes_list):
+        raise RuntimeError("invalid_json")
+
+    rows: list[dict[str, str | int]] = []
+    for note in notes_list:
+        note_id = int(note["id"])
+        item = parsed_by_note_id.get(note_id)
+        if item is None:
+            raise RuntimeError("invalid_json")
+        rows.append(parse_sbar_item(item, note))
+    return rows
 
 
 def get_sbar_rows_from_form() -> list[dict[str, str | int]]:
@@ -936,6 +1056,10 @@ def notes():
                         flash("A biblioteca google-genai nao esta instalada no ambiente.", "error")
                     elif str(exc) == "api_key_missing":
                         flash("Defina a variavel GEMINI_API_KEY para ativar o assistente.", "error")
+                    elif str(exc) == "request_timeout":
+                        flash("O Gemini demorou demais para responder. Tente novamente.", "error")
+                    elif str(exc) == "request_failed":
+                        flash("A consulta ao Gemini falhou por erro de rede ou servico.", "error")
                     elif str(exc) == "empty_response":
                         flash("O Gemini nao retornou texto nesta tentativa.", "error")
                     else:
@@ -958,12 +1082,17 @@ def notes():
                 try:
                     sbar_output = ask_gemini_for_sbar_rows(selected_notes)
                     db.save_user_sbar(user_id, selected_sbar_note_ids, sbar_output)
+                    flash("Tabela de passagem gerada.", "success")
                     return redirect(url_for("notes", tab="sbar"))
                 except RuntimeError as exc:
                     if str(exc) == "sdk_missing":
                         flash("A biblioteca google-genai nao esta instalada no ambiente.", "error")
                     elif str(exc) == "api_key_missing":
                         flash("Defina a variavel GEMINI_API_KEY para ativar o assistente.", "error")
+                    elif str(exc) == "request_timeout":
+                        flash("O Gemini demorou demais para responder. Tente novamente.", "error")
+                    elif str(exc) == "request_failed":
+                        flash("A consulta ao Gemini falhou por erro de rede ou servico.", "error")
                     elif str(exc) == "empty_response":
                         flash("O Gemini nao retornou texto nesta tentativa.", "error")
                     elif str(exc) == "invalid_json":
@@ -1083,6 +1212,10 @@ def review_note(note_id: int):
             return {"ok": False, "error": "A biblioteca google-genai nao esta instalada no ambiente."}, 500
         if str(exc) == "api_key_missing":
             return {"ok": False, "error": "Defina a variavel GEMINI_API_KEY para ativar o assistente."}, 500
+        if str(exc) == "request_timeout":
+            return {"ok": False, "error": "O Gemini demorou demais para responder. Tente novamente."}, 504
+        if str(exc) == "request_failed":
+            return {"ok": False, "error": "A consulta ao Gemini falhou por erro de rede ou servico."}, 502
         if str(exc) == "empty_response":
             return {"ok": False, "error": "O Gemini nao retornou texto nesta tentativa."}, 502
         return {"ok": False, "error": "Nao foi possivel consultar o Gemini."}, 502
