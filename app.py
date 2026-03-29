@@ -42,7 +42,7 @@ app.config["DATABASE_URL"] = os.environ.get(
 )
 app.config["GEMINI_MODEL"] = os.environ.get("GEMINI_MODEL", "gemini-3-flash-preview")
 app.config["GEMINI_TEMPERATURE"] = float(os.environ.get("GEMINI_TEMPERATURE", "0.0"))
-app.config["GEMINI_TIMEOUT_SECONDS"] = int(os.environ.get("GEMINI_TIMEOUT_SECONDS", "20"))
+app.config["GEMINI_TIMEOUT_SECONDS"] = int(os.environ.get("GEMINI_TIMEOUT_SECONDS", "45"))
 app.config["SBAR_BATCH_SIZE"] = int(os.environ.get("SBAR_BATCH_SIZE", "3"))
 app.config["SBAR_BATCH_DELAY_SECONDS"] = float(os.environ.get("SBAR_BATCH_DELAY_SECONDS", "1.0"))
 app.config["MAX_LOGIN_ATTEMPTS"] = 5
