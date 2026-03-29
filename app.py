@@ -426,6 +426,10 @@ def extract_json_payload(text: str) -> str:
     raise RuntimeError("invalid_json")
 
 
+def normalize_json_payload(text: str) -> str:
+    return re.sub(r",(\s*[}\]])", r"\1", text)
+
+
 def build_sbar_prompt(notes_list: list[dict], current_date: str) -> str:
     expected_note_ids = ", ".join(str(int(note["id"])) for note in notes_list)
     prompt = f"""
@@ -443,11 +447,12 @@ Prefira uma passagem util para o proximo plantonista, mesmo que fique um pouco m
 
 Analise apenas as anotacoes fornecidas.
 Escreva em portugues do Brasil.
-Retorne exatamente um JSON valido contendo uma lista.
+Retorne exatamente um JSON valido estrito contendo uma lista.
 Cada item da lista deve corresponder a uma anotacao de entrada.
 Retorne exatamente {len(notes_list)} itens.
 Use obrigatoriamente estes note_id, sem alterar ordem nem omitir nenhum: [{expected_note_ids}]
 Nao inclua markdown, explicacoes, comentarios ou texto fora do JSON.
+Nao use virgula final antes de "}}" ou "]".
 Use esta estrutura exata em cada item:
 {{
   "note_id": 123,
@@ -646,7 +651,7 @@ def ask_gemini_for_sbar_batch_rows(client, notes_list: list[dict], current_date:
         raise RuntimeError("empty_response")
 
     try:
-        parsed = json.loads(extract_json_payload(text))
+        parsed = json.loads(normalize_json_payload(extract_json_payload(text)))
     except (json.JSONDecodeError, RuntimeError):
         raise RuntimeError("invalid_json") from None
 
