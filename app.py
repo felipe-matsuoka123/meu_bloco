@@ -244,8 +244,9 @@ def _handle_gemini_alarm(_signum, _frame) -> None:
 
 
 def classify_gemini_error(exc: Exception) -> str:
+    exc_type_name = type(exc).__name__.lower()
     message = str(exc).lower()
-    if "timeout" in message or "timed out" in message:
+    if "timeout" in exc_type_name or "timeout" in message or "timed out" in message:
         return "request_timeout"
     if "api key" in message or "api_key" in message or "401" in message or "403" in message:
         return "auth_failed"
@@ -591,18 +592,8 @@ def parse_sbar_item(item: dict, note: dict) -> dict[str, str | int]:
     }
 
 
-def ask_gemini_for_sbar_rows(notes_list: list[dict]) -> list[dict[str, str | int]]:
-    if genai is None:
-        raise RuntimeError("sdk_missing")
-
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("api_key_missing")
-
-    client = genai.Client(api_key=api_key)
-    current_date = date.today().isoformat()
-    prompt = build_sbar_prompt(notes_list, current_date)
-
+def ask_gemini_for_single_sbar_row(client, note: dict, current_date: str) -> dict[str, str | int]:
+    prompt = build_sbar_prompt([note], current_date)
     response = generate_gemini_content(client, prompt)
     text = getattr(response, "text", None)
     if not text:
@@ -620,32 +611,25 @@ def ask_gemini_for_sbar_rows(notes_list: list[dict]) -> list[dict[str, str | int
                 parsed = candidate
                 break
 
-    if not isinstance(parsed, list) or len(parsed) != len(notes_list):
+    if not isinstance(parsed, list) or len(parsed) != 1 or not isinstance(parsed[0], dict):
         raise RuntimeError("invalid_json")
 
-    parsed_by_note_id: dict[int, dict] = {}
-    for item in parsed:
-        if not isinstance(item, dict):
-            raise RuntimeError("invalid_json")
-        raw_note_id = item.get("note_id")
-        if isinstance(raw_note_id, int):
-            note_id = raw_note_id
-        elif isinstance(raw_note_id, str) and raw_note_id.strip().isdigit():
-            note_id = int(raw_note_id.strip())
-        else:
-            raise RuntimeError("invalid_json")
-        parsed_by_note_id[note_id] = item
+    return parse_sbar_item(parsed[0], note)
 
-    if len(parsed_by_note_id) != len(notes_list):
-        raise RuntimeError("invalid_json")
 
+def ask_gemini_for_sbar_rows(notes_list: list[dict]) -> list[dict[str, str | int]]:
+    if genai is None:
+        raise RuntimeError("sdk_missing")
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("api_key_missing")
+
+    client = genai.Client(api_key=api_key)
+    current_date = date.today().isoformat()
     rows: list[dict[str, str | int]] = []
     for note in notes_list:
-        note_id = int(note["id"])
-        item = parsed_by_note_id.get(note_id)
-        if item is None:
-            raise RuntimeError("invalid_json")
-        rows.append(parse_sbar_item(item, note))
+        rows.append(ask_gemini_for_single_sbar_row(client, note, current_date))
     return rows
 
 
