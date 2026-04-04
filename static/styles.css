@@ -333,6 +333,30 @@ h3 {
     min-height: auto;
 }
 
+.terms-card {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 20px;
+    background: #f8fbff;
+    padding: 0.9rem;
+}
+
+.terms-scroll {
+    max-height: 320px;
+    overflow-y: auto;
+    border-radius: 16px;
+    background: #ffffff;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    padding: 1rem;
+}
+
+.terms-text {
+    margin: 0;
+    white-space: pre-wrap;
+    line-height: 1.65;
+    font-family: inherit;
+    color: var(--text);
+}
+
 .inline-actions {
     display: flex;
     gap: 0.75rem;

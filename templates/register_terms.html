@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Termos | evolucao.ai{% endblock %}
+
+{% block content %}
+<section class="auth-layout auth-layout-single">
+    <section class="card auth-panel auth-panel-form success-panel">
+        <div class="panel-header">
+            <div>
+                <p class="eyebrow">Cadastro</p>
+                <h2>Leia os termos para continuar</h2>
+            </div>
+        </div>
+
+        <p class="muted">
+            A conta <strong>{{ created_username }}</strong> foi criada. Leia o texto abaixo e pressione o botao ao final para seguir.
+        </p>
+
+        <section class="terms-card" aria-label="Termos de uso">
+            <div class="terms-scroll">
+                <pre class="terms-text">{{ terms_text if terms_text else "Arquivo de termos vazio por enquanto." }}</pre>
+            </div>
+        </section>
+
+        <form method="post" class="inline-form">
+            <button type="submit">Concordo com os termos</button>
+        </form>
+    </section>
+</section>
+{% endblock %}

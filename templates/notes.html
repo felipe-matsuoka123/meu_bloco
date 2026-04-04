@@ -244,6 +244,8 @@
     <main class="flex-1 p-6 lg:ml-64 lg:p-8 xl:p-10">
         <header class="mb-10 flex flex-col gap-5 md:mb-12 md:flex-row md:items-end md:justify-between no-print">
             <div>
+                <a class="inline-flex font-headline text-lg font-black tracking-tight text-primary lg:hidden" href="{{ url_for('notes') }}">evolucao.ai</a>
+                <p class="mt-1 text-xs font-medium text-on-surface-variant lg:hidden">Organize e revise suas anotações com clareza.</p>
                 <h2 class="mb-2 font-headline text-3xl font-extrabold tracking-tight text-primary">{% if active_tab == 'sbar' %}Tabela de passagem{% else %}Suas anotações{% endif %}</h2>
                 {% if active_tab == 'sbar' %}
                     <p class="flex items-center gap-2 text-sm text-on-surface-variant">
@@ -259,6 +261,17 @@
                 </form>
             </div>
         </header>
+
+        <nav class="mb-6 grid grid-cols-2 gap-3 lg:hidden no-print" aria-label="Navegacao entre abas">
+            <a class="flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition-all {% if active_tab != 'sbar' %}border-primary/20 bg-surface-container-highest text-primary{% else %}border-outline-variant/40 bg-surface-container-lowest text-on-surface-variant{% endif %}" href="{{ url_for('notes') }}">
+                <span class="material-symbols-outlined text-base">description</span>
+                <span>Anotações</span>
+            </a>
+            <a class="flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition-all {% if active_tab == 'sbar' %}border-primary/20 bg-surface-container-highest text-primary{% else %}border-outline-variant/40 bg-surface-container-lowest text-on-surface-variant{% endif %}" href="{{ url_for('notes', tab='sbar') }}">
+                <span class="material-symbols-outlined text-base">table_chart</span>
+                <span>Gerar tabela</span>
+            </a>
+        </nav>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}

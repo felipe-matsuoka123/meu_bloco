@@ -32,6 +32,7 @@ except ImportError:
 BASE_DIR = Path(__file__).resolve().parent
 NAMES_CSV_PATH = BASE_DIR / "all-pt-br-names.csv"
 IMAGES_DIR = BASE_DIR / "images"
+TERMS_TEXT_PATH = BASE_DIR / "terms_placeholder.txt"
 load_dotenv(BASE_DIR / ".env")
 
 app = Flask(__name__)
@@ -138,6 +139,21 @@ def gift_card_override_matches(code: str) -> bool:
 
 def create_user_account(username: str, password: str) -> None:
     db.create_user(username, hash_password(password))
+
+
+def set_post_registration_username(username: str) -> None:
+    session["post_registration_username"] = username
+
+
+def get_post_registration_username() -> str | None:
+    username = session.get("post_registration_username")
+    return username if isinstance(username, str) and username else None
+
+
+def load_terms_text() -> str:
+    if not TERMS_TEXT_PATH.exists():
+        return ""
+    return TERMS_TEXT_PATH.read_text(encoding="utf-8").strip()
 
 
 def get_note_map(notes_list: list[dict]) -> dict[int, dict]:
@@ -747,8 +763,8 @@ def register():
             elif gift_card_override_matches(gift_card_code):
                 create_user_account(username, password)
                 session.pop("pending_registration", None)
-                flash("Conta criada com codigo de teste. Agora voce pode entrar.", "success")
-                return redirect(url_for("login"))
+                set_post_registration_username(username)
+                return redirect(url_for("register_terms"))
             else:
                 session["pending_registration"] = {
                     "username": username,
@@ -847,11 +863,27 @@ def checkout_success():
         pending_registration["password"],
     )
     session.pop("pending_registration", None)
+    set_post_registration_username(pending_registration["username"])
+
+    return redirect(url_for("register_terms"))
+
+
+@app.route("/register/terms", methods=["GET", "POST"])
+def register_terms():
+    created_username = get_post_registration_username()
+    if created_username is None:
+        flash("Nenhuma conta criada recentemente foi encontrada.", "error")
+        return redirect(url_for("register"))
+
+    if request.method == "POST":
+        session.pop("post_registration_username", None)
+        flash("Conta criada com sucesso. Voce pode entrar agora.", "success")
+        return redirect(url_for("login"))
 
     return render_template(
-        "checkout_success.html",
-        checkout_session=checkout_session,
-        created_username=pending_registration["username"],
+        "register_terms.html",
+        created_username=created_username,
+        terms_text=load_terms_text(),
     )
 
 
