@@ -21,6 +21,7 @@ from reportlab.pdfgen import canvas
 from werkzeug.security import check_password_hash
 
 import db
+from prompts import build_medical_review_prompt, build_sbar_prompt
 
 try:
     from google import genai
@@ -141,6 +142,31 @@ def create_user_account(username: str, password: str) -> None:
 
 def get_note_map(notes_list: list[dict]) -> dict[int, dict]:
     return {int(note["id"]): note for note in notes_list}
+
+
+def prepend_note_title_to_sbar_patient(note_title: str, patient_text: str) -> str:
+    normalized_title = clean_assistant_text(note_title) or "Sem título"
+    normalized_patient = clean_assistant_text(patient_text)
+    if normalized_patient == normalized_title or normalized_patient.startswith(f"{normalized_title}\n"):
+        return normalized_patient
+    if not normalized_patient:
+        return normalized_title
+    return f"{normalized_title}\n{normalized_patient}"
+
+
+def add_note_titles_to_sbar_rows(rows: list[dict[str, str | int]] | None, note_map: dict[int, dict]) -> list[dict[str, str | int]] | None:
+    if rows is None:
+        return None
+
+    normalized_rows: list[dict[str, str | int]] = []
+    for row in rows:
+        note_id = int(row["note_id"])
+        note = note_map.get(note_id, {})
+        title = str(note.get("title", "Sem título"))
+        normalized_row = dict(row)
+        normalized_row["paciente"] = prepend_note_title_to_sbar_patient(title, str(row.get("paciente", "")))
+        normalized_rows.append(normalized_row)
+    return normalized_rows
 
 
 def get_selected_note_id(notes_list: list[dict]) -> int | None:
@@ -308,80 +334,7 @@ def ask_gemini_for_medical_review(notes_list: list[dict]) -> str:
 
     client = genai.Client(api_key=api_key)
     notes_context = build_notes_context(notes_list)
-    prompt = f"""
-Voce e um medico experiente revisando evolucoes clinicas.
-
-Analise apenas as anotacoes fornecidas.
-
-Escreva em portugues do Brasil.
-Seja direto, objetivo e pratico.
-Use frases curtas e linguagem simples.
-
-REGRAS GERAIS:
-- Nao invente fatos ausentes
-- Nao inferir linha do tempo por ordem das anotacoes
-- Ignore [REMOVIDO]
-- Nao comentar sobre anonimização
-- Priorize impacto clinico real
-- Foque apenas no que muda conduta ou risco
-
-REGRAS DE OBJETIVIDADE:
-- Cada item deve ter no maximo 1 frase curta
-- Evite explicacoes fisiopatologicas
-- Evite detalhamento excessivo
-- Prefira: problema -> acao
-- Se puder simplificar, simplifique
-
-QUANDO IDENTIFICAR PROBLEMAS:
-- Liste apenas os mais relevantes (maximo 3 por secao)
-- Evite generalidades
-- Foque em falhas que impactam decisao
-
-INFORMACOES FALTANDO:
-- Diga exatamente o que falta
-- Use termos amplos quando possivel (ex: “avaliacao de anemia”)
-
-PERGUNTAS EM ABERTO:
-- Devem ser objetivas e acionaveis
-- Relacionadas a conduta, diagnostico ou risco
-
-SCORES:
-- Sugira apenas se claramente aplicaveis
-- Maximo 2 scores
-- Nao sugerir scores irrelevantes
-
-SUGESTAO DE ESTUDO:
-- Maximo 5 palavras
-- Tema geral e pratico
-- Nao detalhar
-
-REGRA FINAL:
-- A resposta deve ser lida em menos de 20 segundos
-- Se estiver longa, reduza pela metade mantendo o essencial
-
-Organize a resposta exatamente assim:
-
-Pontos para melhorar a clareza:
-- ...
-
-Informacoes faltando:
-- ...
-
-Perguntas em aberto:
-- ...
-
-Scores sugeridos:
-- ...
-
-Sugestao de estudo:
-- ...
-
-Se nao houver itens em alguma secao, escreva:
-- Nenhum ponto relevante.
-
-Anotacoes do usuario:
-{notes_context}
-""".strip()
+    prompt = build_medical_review_prompt(notes_context)
 
     response = generate_gemini_content(client, prompt)
     text = getattr(response, "text", None)
@@ -430,155 +383,6 @@ def extract_json_payload(text: str) -> str:
 
 def normalize_json_payload(text: str) -> str:
     return re.sub(r",(\s*[}\]])", r"\1", text)
-
-
-def build_sbar_prompt(notes_list: list[dict], current_date: str) -> str:
-    expected_note_ids = ", ".join(str(int(note["id"])) for note in notes_list)
-    prompt = f"""
-Voce e um medico organizando uma passagem de caso para plantao.
-
-A partir da evolucao clinica, extraia apenas informacoes relevantes para tomada de decisao.
-
-Data de hoje: {current_date}
-
-IMPORTANTE:
-O texto pode conter excesso de informacoes, multiplos exames e eventos ao longo do tempo.
-Sua tarefa e filtrar e organizar apenas o que impacta a conduta atual.
-Nao adicione nenhuma informacao que nao esteja escrita no prontuario original
-Prefira uma passagem util para o proximo plantonista, mesmo que fique um pouco mais detalhada.
-
-Analise apenas as anotacoes fornecidas.
-Escreva em portugues do Brasil.
-Retorne exatamente um JSON valido estrito contendo uma lista.
-Cada item da lista deve corresponder a uma anotacao de entrada.
-Retorne exatamente {len(notes_list)} itens.
-Use obrigatoriamente estes note_id, sem alterar ordem nem omitir nenhum: [{expected_note_ids}]
-Nao inclua markdown, explicacoes, comentarios ou texto fora do JSON.
-Nao use virgula final antes de "}}" ou "]".
-Use esta estrutura exata em cada item:
-{{
-  "note_id": 123,
-  "paciente": "...",
-  "hd": "...",
-  "status_hoje": "...",
-  "riscos_pendencias": "...",
-  "plano": "..."
-}}
-
-Estruture a saida nos seguintes campos:
-
-Paciente:
-HD:
-Status hoje:
-Riscos / Pendencias:
-Plano:
-
-DEFINICOES:
-
-Paciente:
-- Preencha com dados de identificacao clinicamente uteis do paciente
-- Inclua tudo que ajude a identificar o caso, exceto nomes
-- Pode incluir sexo, idade, leito, enfermaria, numero do prontuario, procedencia ou servico, se estiverem escritos
-- Se estiver disponivel, priorize: idade, comorbidades relevantes, medicacoes de uso continuo, internacoes previas, alergias, historico familiar/social relevante e data de internacao hospitalar
-- Sempre sinalize cada dado com rotulo curto e claro, por exemplo: "Idade: 67a. MUC: anlodipino, metformina. DIH: 14/03."
-- Use abreviacoes clinicas usuais quando fizer sentido, incluindo "MUC" e "DIH"
-- Quando listar comorbidades, use explicitamente o rotulo "Comorbidades:"
-- Nao jogue informacoes soltas sem identificar o que cada uma representa
-- Nao invente identificadores ausentes
-- Nao repetir aqui informacoes que ja serao melhor descritas em HD, Status hoje, Riscos / Pendencias ou Plano
-- Esta coluna deve servir para identificar o paciente/caso, nao para resumir a evolucao clinica
-- Leito/localizacao podem ser incluidos aqui quando ajudarem na identificacao do caso
-- Se houver antecedentes pessoais relevantes e estaveis, prefira mantê-los aqui: AP, MUC, alergias, internacoes previas, historico familiar/social relevante e DIH
-
-HD:
-- Diagnostico principal
-- Complicacoes associadas relacionadas ao diagnóstico central
-- Contexto clinico essencial (ex: tempo de internacao, eventos relevantes)
-- Incluir temporalidade quando disponivel (ex: D5 de internacao, evento em 10/03)
-- Incluir procedimentos relevantes, culturas positivas, cirurgias ou eventos marcantes quando mudarem entendimento do caso
-- Nao incluir lista extensa de exames antigos, mas manter achados objetivos essenciais
-- Incluir HMA concisa e cronologica quando ela for necessaria para entender por que o paciente internou
-- Resumir a admissao no pronto socorro quando isso for relevante para o caso atual
-- Se relevante, incluir na HD: exame fisico de admissao, exames laboratoriais/de imagem de admissao, diagnosticos de admissao e plano inicial
-- Se houver intercorrencias relevantes durante a internacao, incorporar a linha geral dessas mudancas aqui
-
-Status hoje:
-- Estado atual do paciente (momento da avaliacao mais recente)
-- Exame Físico atual (focar nas alteracoes)
-- Nivel de consciencia, estabilidade hemodinamica e respiratoria
-- Medicacoes importantes em uso (ex: antibiotico com dia de tratamento, anticoagulacao, antiagregantes)
-- Dispositivos e suportes atuais quando relevantes (ex: O2, VM, DVA, dreno, SNE, diurese, acesso)
-- Exames recentes que mudam a conduta atual, com valor resumido quando houver (ex: Hb 6,8 em 28/03; Cr 2,1 hoje)
-- Incluir referencia temporal se relevante (ex: "hoje", "ultimas 24h")
-- NAO incluir dados normais sem impacto
-- Este campo representa a evolucao do dia e deve responder a conduta do dia anterior
-- Incluir sinais de resposta ao tratamento, sinais de melhora/piora clinica e mudancas importantes nas ultimas 24h
-- Se alterados ou relevantes, incluir sinais vitais, diurese, evacuacao e outros marcadores objetivos do dia
-- Incluir exame fisico objetivo atual e exames complementares relevantes do dia
-
-Riscos / Pendencias:
-- Problemas ainda nao resolvidos
-- Avaliacoes pendentes (ex: aguardando parecer)
-- Riscos reais de deterioracao
-- Incluir contexto temporal quando aplicavel (ex: "desde 21/03", "aguardando desde admissao")
-- Quando incluir exames, citar data
-- Incluir o que precisa ser vigiado no plantao e quais resultados ainda podem mudar conduta
-- Incluir avaliacoes complementares importantes pendentes, como pareceres de especialidades e exames que ainda podem redefinir a conduta
-- Se houve intercorrencias na internacao que ainda tenham impacto, destacar aqui como risco ou pendencia ativa
-
-Plano:
-- Condutas principais (resumidas)
-- Incluir acoes futuras relevantes (ex: na alta, apos avaliacao)
-- Incluir proximo passo pratico e gatilhos de reavaliacao quando estiverem descritos
-- Nao listar checklist longo, mas deixar claro o rumo da conduta
-- Incluir as acoes imediatas e pontuais do plantao atual
-- Incluir tambem o plano terapeutico de medio/longo prazo, incluindo estrategia de enfermaria e planejamento de alta se estiverem descritos
-
-REGRAS CRITICAS:
-- Nao repetir informacao entre campos!
-- NAO copiar a evolucao original
-- Resumir com densidade informativa alta
-- NAO listar exames irrelevantes ou antigos
-- Sempre priorizar informacao recente sobre antiga
-- Sempre explicitar estabilidade ou instabilidade do paciente
-- NAO inventar informacoes ausentes
-- Se houver poucos dados, seja breve; se houver dados decisivos, preserve-os
-- Prefira frases curtas, mas cada campo deve ficar completo o suficiente para orientar o plantao
-
-REGRAS DE TEMPORALIDADE (ESSENCIAL):
-- Sempre que houver datas, utilize-as para organizar o raciocinio clinico
-- Priorize eventos mais recentes
-- Diferencie claramente:
-  -> evento passado relevante
-  -> estado atual
-  -> plano futuro
-
-HEURISTICAS DE FILTRAGEM:
-- Priorize: risco > conduta > estado atual > historico
-- Ignore exames que nao mudam conduta atual
-- Se multiplos exames: usar apenas o que muda decisao
-- Conduta longa -> resumir em intencao clinica
-
-DETALHES QUE VALEM A PENA MANTER:
-- Data de internacao, D de tratamento, antibiotico em curso e dia do esquema
-- Mudancas recentes importantes nas ultimas 24-72h
-- Exames ou imagens anormais que sustentam a decisao atual
-- Parecer pendente ou procedimento programado
-- Critério de alta, transferência ou necessidade de reabordagem, se estiver descrito
-- Leito/localizacao quando ajudarem a identificar o paciente
-- Dados relevantes da admissao no pronto socorro quando ainda explicarem o estado atual
-- Intercorrencias importantes desde a admissao
-
-Antes de responder, identifique mentalmente:
-1. principal problema ativo
-2. maior risco atual
-3. decisao mais importante do plantao
-4. o que pertence a identificacao, ao historico do caso, ao estado atual, ao risco pendente e ao plano
-
-Anotacoes:
-{build_sbar_context(notes_list)}
-""".strip()
-    return prompt
 
 
 def parse_sbar_item(item: dict, note: dict) -> dict[str, str | int]:
@@ -646,7 +450,9 @@ def parse_sbar_response_for_notes(parsed: object, notes_list: list[dict]) -> lis
 
 
 def ask_gemini_for_sbar_batch_rows(client, notes_list: list[dict], current_date: str) -> list[dict[str, str | int]]:
-    prompt = build_sbar_prompt(notes_list, current_date)
+    notes_context = build_sbar_context(notes_list)
+    expected_note_ids = ", ".join(str(int(note["id"])) for note in notes_list)
+    prompt = build_sbar_prompt(notes_context, current_date, expected_note_ids, len(notes_list))
     response = generate_gemini_content(client, prompt)
     text = getattr(response, "text", None)
     if not text:
@@ -1200,6 +1006,7 @@ def notes():
     selected_sbar_note_ids = [
         note_id for note_id in selected_sbar_note_ids if note_id in note_map
     ]
+    sbar_output = add_note_titles_to_sbar_rows(sbar_output, note_map)
     review_counts = {
         int(note["id"]): db.get_note_review_count(int(note["id"]), today_key())
         for note in notes_list
