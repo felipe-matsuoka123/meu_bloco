@@ -31,7 +31,6 @@ A small Python notes app with:
 
    ```bash
    export SECRET_KEY="replace-this-with-a-random-secret"
-   export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/meu_bloco"
    export GEMINI_API_KEY="your-google-gemini-api-key"
    export STRIPE_SECRET_KEY="sk_test_..."
    export STRIPE_PRICE_LOOKUP_KEY="starter_plan"
@@ -39,12 +38,11 @@ A small Python notes app with:
    ```
 
    `SECRET_KEY` is a long random private string used by Flask to protect sessions and login cookies.
-   `DATABASE_URL` must point at an existing PostgreSQL database.
+   The app uses the hard-coded local PostgreSQL database at `postgresql://postgres:postgres@localhost:5432/meu_bloco`.
    Example:
 
    ```bash
    export SECRET_KEY="8f1c6c6e7f194d0c8f2dbd3e7a0a9c3142e6b1baf4f54b2b"
-   export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/meu_bloco"
    ```
 
 4. Start the app:
@@ -86,7 +84,7 @@ Use the HTTPS forwarding URL from `ngrok` to access the app remotely.
    - `STRIPE_SECRET_KEY`
    - `STRIPE_PRICE_LOOKUP_KEY`
    - `GIFT_CARD_OVERRIDE_CODE`
-4. Make sure `DATABASE_URL` is available to the app service from the PostgreSQL service.
+4. Update the hard-coded `DATABASE_URL` in [db.py](/home/felipe/projects/meu_bloco/db.py) to match the Railway PostgreSQL service.
 5. Railway can use [Procfile](/home/felipe/projects/meu_bloco/Procfile) or this explicit start command:
 
    ```bash

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -11,11 +10,11 @@ from psycopg.rows import dict_row
 
 BASE_DIR = Path(__file__).resolve().parent
 SCHEMA_PATH = BASE_DIR / "schema.sql"
-DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/meu_bloco"
+DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/meu_bloco"
 
 
 def database_url() -> str:
-    return current_app.config.get("DATABASE_URL") or os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
+    return current_app.config.get("DATABASE_URL") or DATABASE_URL
 
 
 def get_db() -> psycopg.Connection:
