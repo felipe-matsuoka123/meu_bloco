@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <title>Anotações | bucho</title>
+    <title>Anotações | Bucho</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
@@ -216,7 +216,7 @@
 <body class="flex min-h-screen bg-surface font-body text-on-surface">
     <aside class="fixed left-0 top-0 z-40 hidden h-full w-64 flex-col space-y-4 bg-surface-container-low p-6 lg:flex no-print">
         <div class="mb-8">
-            <h1 class="font-headline text-lg font-black tracking-tight text-primary">bucho</h1>
+            <h1 class="font-headline text-lg font-black tracking-tight text-primary">Bucho</h1>
             <p class="mt-1 text-xs font-medium text-on-surface-variant">Organize e revise suas anotações com clareza.</p>
         </div>
 
@@ -244,9 +244,9 @@
     <main class="flex-1 p-6 lg:ml-64 lg:p-8 xl:p-10">
         <header class="mb-10 flex flex-col gap-5 md:mb-12 md:flex-row md:items-end md:justify-between no-print">
             <div>
-                <a class="inline-flex font-headline text-lg font-black tracking-tight text-primary lg:hidden" href="{{ url_for('notes') }}">bucho</a>
+                <a class="inline-flex font-headline text-lg font-black tracking-tight text-primary lg:hidden" href="{{ url_for('notes') }}">Bucho</a>
                 <p class="mt-1 text-xs font-medium text-on-surface-variant lg:hidden">Organize e revise suas anotações com clareza.</p>
-                <h2 class="mb-2 font-headline text-3xl font-extrabold tracking-tight text-primary">{% if active_tab == 'sbar' %}Tabela de passagem{% else %}Suas anotações{% endif %}</h2>
+                <h2 class="mb-2 font-headline text-3xl font-extrabold tracking-tight text-primary">{% if active_tab == 'sbar' %}Tabela de passagem{% else %}Anotações{% endif %}</h2>
                 {% if active_tab == 'sbar' %}
                     <p class="flex items-center gap-2 text-sm text-on-surface-variant">
                         <span class="h-2 w-2 rounded-full bg-secondary"></span>

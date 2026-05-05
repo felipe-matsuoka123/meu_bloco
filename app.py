@@ -15,6 +15,8 @@ import bcrypt
 import stripe
 from flask import Flask, flash, redirect, render_template, request, send_file, send_from_directory, session, url_for
 from dotenv import load_dotenv
+load_dotenv()
+
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
@@ -38,7 +40,7 @@ load_dotenv(BASE_DIR / ".env")
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me-for-production")
-app.config["DATABASE_URL"] = db.DATABASE_URL
+app.config["DATABASE_URL"] = os.environ.get("DATABASE_URL", db.DATABASE_URL)
 app.config["GEMINI_MODEL"] = os.environ.get("GEMINI_MODEL", "gemini-3-flash-preview")
 app.config["GEMINI_TEMPERATURE"] = float(os.environ.get("GEMINI_TEMPERATURE", "0.0"))
 app.config["GEMINI_TIMEOUT_SECONDS"] = int(os.environ.get("GEMINI_TIMEOUT_SECONDS", "45"))
