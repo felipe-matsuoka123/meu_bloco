@@ -223,7 +223,11 @@
         <nav class="flex-1 space-y-1">
             <a class="flex items-center space-x-3 rounded-lg px-4 py-3 font-medium transition-all {% if active_tab == 'notes' %}bg-surface-container-highest text-primary{% else %}text-slate-600 hover:bg-surface-container-highest/50{% endif %}" href="{{ url_for('notes') }}">
                 <span class="material-symbols-outlined">description</span>
-                <span>Anotações</span>
+                <span>Pacientes</span>
+            </a>
+            <a class="group flex w-full items-center space-x-3 rounded-lg px-4 py-3 font-medium transition-all {% if active_tab == 'quick' %}bg-surface-container-highest text-primary{% else %}text-slate-600 hover:bg-surface-container-highest/50{% endif %}" href="{{ url_for('notes', tab='quick') }}">
+                <span class="material-symbols-outlined {% if active_tab != 'quick' %}group-hover:text-primary{% endif %}">edit_note</span>
+                <span {% if active_tab != 'quick' %}class="group-hover:text-primary"{% endif %}>Editor de texto</span>
             </a>
             <a class="group flex w-full items-center space-x-3 rounded-lg px-4 py-3 font-medium transition-all {% if active_tab == 'tasks' %}bg-surface-container-highest text-primary{% else %}text-slate-600 hover:bg-surface-container-highest/50{% endif %}" href="{{ url_for('notes', tab='tasks') }}">
                 <span class="material-symbols-outlined {% if active_tab != 'tasks' %}group-hover:text-primary{% endif %}">checklist</span>
@@ -234,6 +238,49 @@
                 <span {% if active_tab != 'sbar' %}class="group-hover:text-primary"{% endif %}>Gerar tabela</span>
             </a>
         </nav>
+
+        <div class="space-y-1 border-t border-outline-variant/20 pt-6 mb-6">
+            <h4 class="px-4 text-[10px] font-bold uppercase tracking-widest text-secondary">Pastas / Setores</h4>
+            <a class="flex items-center space-x-3 rounded-lg px-4 py-2 text-sm font-medium transition-all text-slate-600 hover:bg-surface-container-highest/50" href="?">
+                <span class="material-symbols-outlined text-[18px]">folder_open</span>
+                <span>Todos os Pacientes</span>
+            </a>
+            {% for loc in locations %}
+            <div class="flex items-center justify-between rounded-lg px-4 py-2 text-sm font-medium transition-all text-slate-600 hover:bg-surface-container-highest/50 group {% if filter_location == loc.id|string %}bg-surface-container-highest text-primary font-bold{% endif %}">
+                <a href="?location={{ loc.id }}" class="flex-1 flex items-center space-x-3">
+                    <span class="material-symbols-outlined text-[18px] text-primary/70">folder</span>
+                    <span>{{ loc.name }}</span>
+                </a>
+                <form method="post" action="{{ url_for('delete_location', location_id=loc.id) }}" onsubmit="return confirm('Tem certeza? Isso não apagará os pacientes, apenas a pasta.')" class="hidden group-hover:block">
+                    <button type="submit" class="text-error hover:text-error-container"><span class="material-symbols-outlined text-[16px]">close</span></button>
+                </form>
+            </div>
+            {% endfor %}
+            <form method="post" action="{{ url_for('create_location') }}" class="px-4 mt-2 flex gap-2">
+                <input type="text" name="name" placeholder="Nova pasta..." class="w-full rounded border border-outline-variant/40 bg-surface-container-lowest px-2 py-1 text-xs outline-none focus:border-primary" required>
+                <button type="submit" class="text-primary hover:text-primary-container"><span class="material-symbols-outlined text-[18px]">add_circle</span></button>
+            </form>
+        </div>
+
+        <div class="space-y-1 border-t border-outline-variant/20 pt-6 mb-6">
+            <h4 class="px-4 text-[10px] font-bold uppercase tracking-widest text-secondary">Arquivo de Pacientes</h4>
+            <a class="flex items-center space-x-3 rounded-lg px-4 py-2 text-sm font-medium transition-all {% if filter_status == 'alta' %}bg-surface-container-highest text-primary font-bold{% else %}text-slate-600 hover:bg-surface-container-highest/50{% endif %}" href="?status=alta">
+                <span class="material-symbols-outlined text-[18px]">verified</span>
+                <span>Alta</span>
+            </a>
+            <a class="flex items-center space-x-3 rounded-lg px-4 py-2 text-sm font-medium transition-all {% if filter_status == 'obito' %}bg-surface-container-highest text-primary font-bold{% else %}text-slate-600 hover:bg-surface-container-highest/50{% endif %}" href="?status=obito">
+                <span class="material-symbols-outlined text-[18px]">church</span>
+                <span>Óbito</span>
+            </a>
+            <a class="flex items-center space-x-3 rounded-lg px-4 py-2 text-sm font-medium transition-all {% if filter_status == 'evasao' %}bg-surface-container-highest text-primary font-bold{% else %}text-slate-600 hover:bg-surface-container-highest/50{% endif %}" href="?status=evasao">
+                <span class="material-symbols-outlined text-[18px]">directions_run</span>
+                <span>Evasão</span>
+            </a>
+            <a class="flex items-center space-x-3 rounded-lg px-4 py-2 text-sm font-medium transition-all {% if filter_status == 'outro' %}bg-surface-container-highest text-primary font-bold{% else %}text-slate-600 hover:bg-surface-container-highest/50{% endif %}" href="?status=outro">
+                <span class="material-symbols-outlined text-[18px]">inventory_2</span>
+                <span>Outros</span>
+            </a>
+        </div>
 
         <div class="space-y-1 border-t border-outline-variant/20 pt-6">
             <form method="post" action="{{ url_for('logout') }}">
@@ -250,7 +297,7 @@
             <div>
                 <a class="inline-flex font-headline text-lg font-black tracking-tight text-primary lg:hidden" href="{{ url_for('notes') }}">Bucho</a>
                 <p class="mt-1 text-xs font-medium text-on-surface-variant lg:hidden">Organize e revise suas anotações com clareza.</p>
-                <h2 class="mb-2 font-headline text-3xl font-extrabold tracking-tight text-primary">{% if active_tab == 'sbar' %}Tabela de passagem{% elif active_tab == 'tasks' %}Pendências{% else %}Anotações{% endif %}</h2>
+                <h2 class="mb-2 font-headline text-3xl font-extrabold tracking-tight text-primary">{% if active_tab == 'quick' %}Editor de texto{% elif active_tab == 'sbar' %}Tabela de passagem{% elif active_tab == 'tasks' %}Pendências{% else %}Anotações{% endif %}</h2>
                 {% if active_tab == 'sbar' %}
                     <p class="flex items-center gap-2 text-sm text-on-surface-variant">
                         <span class="h-2 w-2 rounded-full bg-secondary"></span>
@@ -271,10 +318,14 @@
             </div>
         </header>
 
-        <nav class="mb-6 grid grid-cols-3 gap-2 lg:hidden no-print" aria-label="Navegacao entre abas">
+        <nav class="mb-6 grid grid-cols-4 gap-2 lg:hidden no-print" aria-label="Navegacao entre abas">
             <a class="flex items-center justify-center gap-1 rounded-xl border px-2 py-3 text-xs font-semibold transition-all {% if active_tab == 'notes' %}border-primary/20 bg-surface-container-highest text-primary{% else %}border-outline-variant/40 bg-surface-container-lowest text-on-surface-variant{% endif %}" href="{{ url_for('notes') }}">
                 <span class="material-symbols-outlined text-sm">description</span>
-                <span>Anotações</span>
+                <span>Pacientes</span>
+            </a>
+            <a class="flex items-center justify-center gap-1 rounded-xl border px-2 py-3 text-xs font-semibold transition-all {% if active_tab == 'quick' %}border-primary/20 bg-surface-container-highest text-primary{% else %}border-outline-variant/40 bg-surface-container-lowest text-on-surface-variant{% endif %}" href="{{ url_for('notes', tab='quick') }}">
+                <span class="material-symbols-outlined text-sm">edit_note</span>
+                <span>Editor</span>
             </a>
             <a class="flex items-center justify-center gap-1 rounded-xl border px-2 py-3 text-xs font-semibold transition-all {% if active_tab == 'tasks' %}border-primary/20 bg-surface-container-highest text-primary{% else %}border-outline-variant/40 bg-surface-container-lowest text-on-surface-variant{% endif %}" href="{{ url_for('notes', tab='tasks') }}">
                 <span class="material-symbols-outlined text-sm">checklist</span>
@@ -449,6 +500,43 @@
                 </div>
             {% endif %}
         </section>
+        {% elif active_tab == 'quick' %}
+        <section class="mb-16 no-print" id="quick-composer">
+            <div class="overflow-hidden rounded-xl bg-surface-container-lowest shadow-[0_20px_40px_rgba(0,49,120,0.06)]">
+                <div class="p-8">
+                    <div class="mb-6 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <span class="material-symbols-outlined text-primary">edit_note</span>
+                            <h3 class="font-headline font-bold text-primary">Editor de texto</h3>
+                        </div>
+                        <button type="button" onclick="printQuickNote()" class="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow transition hover:bg-primary/90">
+                            <span class="material-symbols-outlined text-sm">print</span> Imprimir
+                        </button>
+                    </div>
+                    
+                    <!-- Toolbar -->
+                    <div class="mb-3 flex flex-wrap gap-2 rounded-lg bg-surface-container-low p-2">
+                        <button type="button" onclick="document.execCommand('bold', false, null)" class="rounded px-3 py-1.5 hover:bg-outline-variant/20 font-bold" title="Negrito">B</button>
+                        <button type="button" onclick="document.execCommand('italic', false, null)" class="rounded px-3 py-1.5 hover:bg-outline-variant/20 italic font-serif" title="Itálico">I</button>
+                        <button type="button" onclick="document.execCommand('underline', false, null)" class="rounded px-3 py-1.5 hover:bg-outline-variant/20 underline" title="Sublinhado">U</button>
+                        <div class="w-px bg-outline-variant/30 my-1"></div>
+                        <button type="button" onclick="document.execCommand('hiliteColor', false, 'yellow')" class="rounded px-2 py-1.5 hover:bg-outline-variant/20" title="Destacar (Amarelo)"><span class="material-symbols-outlined text-[18px] text-yellow-600">format_ink_highlighter</span></button>
+                        <button type="button" onclick="document.execCommand('removeFormat', false, null)" class="rounded px-2 py-1.5 hover:bg-outline-variant/20" title="Limpar Formatação"><span class="material-symbols-outlined text-[18px]">format_clear</span></button>
+                        <div class="w-px bg-outline-variant/30 my-1"></div>
+                        <button type="button" onclick="transformUppercase()" class="rounded px-2 py-1.5 hover:bg-outline-variant/20 font-bold text-sm" title="Alternar Maiúsculo/Minúsculo">AA</button>
+                        <select onchange="document.execCommand('fontSize', false, this.value)" class="rounded bg-surface px-2 py-1 outline-none text-sm border border-outline-variant/30">
+                            <option value="3">Fonte Normal</option>
+                            <option value="5">Fonte Grande</option>
+                            <option value="7">Fonte Gigante</option>
+                        </select>
+                    </div>
+
+                    <div id="quick-note-editor" contenteditable="true" class="min-h-[500px] w-full rounded-xl border border-outline-variant/30 bg-white p-6 outline-none focus:ring-2 focus:ring-primary/20 text-on-surface print:border-none print:p-0 print:m-0" oninput="autosaveQuickNote()">{{ quick_note | safe }}</div>
+                    <div class="mt-3 text-right text-xs text-outline-variant" id="quick-note-status"></div>
+                </div>
+            </div>
+        </section>
+
         {% elif active_tab == 'tasks' %}
         <section class="mb-16 no-print" id="tasks-composer">
             <div class="overflow-hidden rounded-xl bg-surface-container-lowest shadow-[0_20px_40px_rgba(0,49,120,0.06)]">
@@ -494,6 +582,7 @@
             </div>
         </section>
         {% else %}
+        {% if not filter_status %}
         <section class="mb-16" id="note-composer">
             <div class="overflow-hidden rounded-xl bg-surface-container-lowest shadow-[0_20px_40px_rgba(0,49,120,0.06)]">
                 <div class="p-8">
@@ -510,9 +599,20 @@
                         <input type="hidden" name="form_name" value="note">
                         <input type="hidden" name="active_tab" value="notes">
 
-                        <div class="group relative">
-                            <input class="w-full border-b-2 border-outline-variant bg-transparent py-3 text-lg font-medium outline-none transition-all placeholder:text-outline-variant/60 focus:border-secondary" name="title" placeholder="Nome do paciente ou título do caso" required type="text">
-                            <label class="absolute -top-3 left-0 text-[10px] font-bold uppercase tracking-widest text-secondary opacity-0 transition-opacity group-focus-within:opacity-100">Título / paciente</label>
+                        <div class="flex flex-col md:flex-row gap-4">
+                            <div class="group relative flex-1">
+                                <input class="w-full border-b-2 border-outline-variant bg-transparent py-3 text-lg font-medium outline-none transition-all placeholder:text-outline-variant/60 focus:border-secondary" name="title" placeholder="Nome do paciente ou título do caso" required type="text">
+                                <label class="absolute -top-3 left-0 text-[10px] font-bold uppercase tracking-widest text-secondary opacity-0 transition-opacity group-focus-within:opacity-100">Título / paciente</label>
+                            </div>
+                            <div class="w-full md:w-64">
+                                <label class="text-[10px] font-bold uppercase tracking-widest text-secondary block mb-1">Setor / Pasta</label>
+                                <select name="location_id" class="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none focus:border-primary">
+                                    <option value="">Sem setor</option>
+                                    {% for loc in locations %}
+                                    <option value="{{ loc.id }}">{{ loc.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
                         </div>
 
                         <div class="group relative">
@@ -565,6 +665,7 @@
             </div>
         </section>
 
+        {% endif %}
         <section>
             <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <h3 class="font-headline text-xl font-bold tracking-tight text-primary">Histórico recente</h3>
@@ -600,29 +701,50 @@
                             >
                                 <div class="flex-1">
                                     <div class="mb-4 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                                        <div class="flex items-center gap-3">
-                                            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-primary-fixed font-headline font-bold text-primary">
-                                                {{ title_text[:2].upper() }}
-                                            </div>
+                                        <div class="flex items-center gap-3 w-full md:w-auto">
+                                            <button type="button" onclick="updateNoteMetadata({{ note.id }}, 'is_favorite', {{ 'false' if note.is_favorite else 'true' }})" class="text-yellow-500 hover:scale-110 transition-transform">
+                                                <span class="material-symbols-outlined text-[32px]" style="font-variation-settings: 'FILL' {% if note.is_favorite %}1{% else %}0{% endif %};">star</span>
+                                            </button>
                                             <div class="min-w-0 flex-1">
                                                 <input class="w-full border-0 bg-transparent p-0 font-headline text-lg font-bold text-primary outline-none ring-0 placeholder:text-outline-variant" data-autosave-note-title name="title" placeholder="Título da anotação" required type="text" value="{{ title_text }}">
                                                 <input class="mt-1 w-full border-0 bg-transparent p-0 text-sm font-semibold text-secondary outline-none ring-0 placeholder:text-secondary/50" data-autosave-note-diagnosis name="diagnosis" placeholder="Hipótese diagnóstica" type="text" value="{{ note['diagnosis'] or '' }}">
-                                                <p class="mt-1 text-xs font-medium text-outline">
-                                                    Última edição:
-                                                    {% if note["created_at"] %}
-                                                        {{ note["created_at"].strftime("%d/%m/%Y %H:%M") }}
-                                                    {% else %}
-                                                        Agora
-                                                    {% endif %}
-                                                </p>
                                             </div>
+                                        </div>
+                                        <div class="flex flex-col gap-2 w-full md:w-auto">
+                                            <select class="rounded border border-outline-variant/30 bg-surface-container-lowest px-2 py-1 text-xs font-medium text-on-surface-variant outline-none" onchange="updateNoteMetadata({{ note.id }}, 'location_id', this.value)">
+                                                <option value="0">Sem Setor</option>
+                                                {% for loc in locations %}
+                                                <option value="{{ loc.id }}" {% if note.location_id|string == loc.id|string %}selected{% endif %}>{{ loc.name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <select class="rounded border border-outline-variant/30 px-2 py-1 text-xs font-bold uppercase outline-none transition-colors {% if note.status != 'ativo' %}bg-outline-variant/20 text-on-surface-variant{% else %}bg-primary-container/20 text-primary{% endif %}" onchange="updateNoteMetadata({{ note.id }}, 'status', this.value)">
+                                                <option value="ativo" {% if note.status == 'ativo' %}selected{% endif %}>Ativo</option>
+                                                <option value="alta" {% if note.status == 'alta' %}selected{% endif %}>Alta</option>
+                                                <option value="obito" {% if note.status == 'obito' %}selected{% endif %}>Óbito</option>
+                                                <option value="evasao" {% if note.status == 'evasao' %}selected{% endif %}>Evasão</option>
+                                                <option value="outro" {% if note.status == 'outro' %}selected{% endif %}>Outro</option>
+                                            </select>
                                         </div>
                                     </div>
 
-                                    <label class="block">
-                                        <span class="sr-only">Conteúdo</span>
-                                        <textarea class="w-full resize-none rounded-lg bg-surface-container-low/40 p-5 text-sm leading-relaxed text-on-surface-variant outline-none transition-all focus:ring-2 focus:ring-secondary/20" data-autosave-note-input name="content" required rows="5">{{ note["content"] }}</textarea>
-                                    </label>
+                                    <div class="mt-4 border-l-2 border-primary/20 pl-4 space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar" id="evolutions-{{ note.id }}">
+                                        {% for evo in note.evolutions %}
+                                        <div class="bg-surface-container-lowest/50 p-3 rounded-lg border border-outline-variant/10">
+                                            <p class="text-[10px] font-bold tracking-widest text-secondary/70 mb-1 uppercase">{{ evo.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                                            <p class="text-sm leading-relaxed text-on-surface-variant whitespace-pre-wrap">{{ evo.content }}</p>
+                                        </div>
+                                        {% endfor %}
+                                        {% if not note.evolutions %}
+                                        <p class="text-xs text-outline-variant italic">Nenhuma evolução registrada.</p>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="mt-4">
+                                        <textarea id="new-evo-{{ note.id }}" class="w-full resize-none rounded-lg border border-outline-variant/30 bg-surface-container-lowest p-3 text-sm leading-relaxed text-on-surface-variant outline-none transition-all placeholder:text-outline-variant/60 focus:border-primary focus:ring-1 focus:ring-primary/20" placeholder="Adicionar nova evolução clínica... Dica: cole do editor de texto" rows="3"></textarea>
+                                        <button type="button" onclick="addEvolution({{ note.id }})" class="mt-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white transition-all hover:bg-primary/90 active:scale-95 shadow-sm">
+                                            Salvar Evolução
+                                        </button>
+                                    </div>
 
                                     <section class="mt-4 rounded-xl border border-secondary/15 bg-secondary-fixed/30 p-4" data-note-review-box data-has-review="{% if note['review_output'] %}true{% else %}false{% endif %}" {% if not note['review_output'] %}hidden{% endif %}>
                                         <div class="mb-3 flex items-center justify-between gap-4">
@@ -638,6 +760,7 @@
                                     </section>
 
                                     <!-- INICIO CHECKLIST DA NOTA -->
+                                    {% if note.status == 'ativo' or not note.status %}
                                     <section class="mt-4 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-4">
                                         <div class="mb-3 flex items-center justify-between gap-4">
                                             <div>
@@ -686,6 +809,7 @@
                                         </div>
                                     </section>
                                     <!-- FIM CHECKLIST DA NOTA -->
+                                    {% endif %}
 
                                     <p class="mt-3 text-xs font-medium text-outline" data-autosave-status aria-live="polite"></p>
                                 </div>
@@ -1127,6 +1251,86 @@
                     window.print();
                 });
             }
+
+            
+            // New Note Functions
+            window.updateNoteMetadata = function(noteId, field, value) {
+                const payload = {};
+                payload[field] = value;
+                fetch(`/notes/${noteId}/metadata`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                }).then(res => res.json()).then(data => {
+                    if (data.ok) location.reload();
+                }).catch(console.error);
+            };
+
+            window.addEvolution = function(noteId) {
+                const textarea = document.getElementById(`new-evo-${noteId}`);
+                if (!textarea.value.trim()) return;
+                
+                fetch(`/notes/${noteId}/evolution`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ content: textarea.value })
+                }).then(res => res.json()).then(data => {
+                    if (data.ok) location.reload();
+                }).catch(console.error);
+            };
+
+            let quickNoteTimeout;
+            window.autosaveQuickNote = function() {
+                const editor = document.getElementById('quick-note-editor');
+                const status = document.getElementById('quick-note-status');
+                if (!editor || !status) return;
+                
+                status.textContent = "Salvando...";
+                clearTimeout(quickNoteTimeout);
+                quickNoteTimeout = setTimeout(() => {
+                    fetch('/quick_note', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ content: editor.innerHTML })
+                    }).then(res => res.json()).then(data => {
+                        if (data.ok) {
+                            status.textContent = "Salvo automaticamente.";
+                        } else {
+                            status.textContent = "Erro ao salvar.";
+                        }
+                    }).catch(() => {
+                        status.textContent = "Erro de conexão ao salvar.";
+                    });
+                }, 1000);
+            };
+            
+            window.transformUppercase = function() {
+                const editor = document.getElementById('quick-note-editor');
+                if(!editor) return;
+                editor.innerText = editor.innerText.toUpperCase();
+                autosaveQuickNote();
+            };
+
+            window.printQuickNote = function() {
+                const content = document.getElementById('quick-note-editor').innerHTML;
+                const printWin = window.open('', '_blank');
+                printWin.document.write(`
+                    <html>
+                        <head>
+                            <title>Editor de texto</title>
+                            <style>
+                                body { font-family: sans-serif; padding: 20px; line-height: 1.5; }
+                                p { margin: 0 0 10px 0; }
+                            </style>
+                        </head>
+                        <body>
+                            ${content}
+                            <script>window.print(); window.close();<\/script>
+                        </body>
+                    </html>
+                `);
+                printWin.document.close();
+            };
 
             // Tasks logic
             window.addAnotherNewNoteTask = function() {
