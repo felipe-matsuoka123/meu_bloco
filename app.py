@@ -201,7 +201,7 @@ def set_selected_note_id(selected_id: int | None) -> None:
 
 def get_active_tab() -> str:
     tab = request.args.get("tab", "").strip().lower()
-    if tab in {"notes", "sbar"}:
+    if tab in {"notes", "sbar", "tasks"}:
         return tab
     return "notes"
 
@@ -918,7 +918,7 @@ def notes():
     if request.method == "POST":
         form_name = request.form.get("form_name")
         active_tab = request.form.get("active_tab", active_tab).strip().lower()
-        if active_tab not in {"notes", "sbar"}:
+        if active_tab not in {"notes", "sbar", "tasks"}:
             active_tab = "notes"
 
         if form_name == "review":
@@ -1024,12 +1024,38 @@ def notes():
             title = request.form.get("title", "").strip()
             diagnosis = request.form.get("diagnosis", "").strip()
             content = request.form.get("content", "").strip()
+            task_descs = request.form.getlist("new_note_task_desc[]")
+            if not task_descs:
+                task_descs = request.form.getlist("new_note_task_desc")
+            task_urgencies = request.form.getlist("new_note_task_urgency[]")
+            if not task_urgencies:
+                task_urgencies = request.form.getlist("new_note_task_urgency")
+            task_recurrences = request.form.getlist("new_note_task_recurrence[]")
+            if not task_recurrences:
+                task_recurrences = request.form.getlist("new_note_task_recurrence")
+
             if not title:
                 flash("A anotacao precisa de um titulo.", "error")
             elif not content:
                 flash("A anotacao nao pode ficar vazia.", "error")
             else:
-                db.create_note(user_id, title, diagnosis, content)
+                new_note_id = db.create_note(user_id, title, diagnosis, content)
+                for i in range(len(task_descs)):
+                    desc = task_descs[i].strip()
+                    if not desc:
+                        continue
+                    urg = task_urgencies[i].strip().lower() if i < len(task_urgencies) else "baixa"
+                    rec_str = task_recurrences[i].strip() if i < len(task_recurrences) else "0"
+                    
+                    try:
+                        rec_hours = int(rec_str)
+                    except ValueError:
+                        rec_hours = 0
+                    if urg not in {"baixa", "media", "alta"}:
+                        urg = "baixa"
+                    
+                    db.create_task(user_id, new_note_id, desc, urg, rec_hours)
+                
                 session.pop("review_output", None)
                 flash("Anotacao salva.", "success")
                 return redirect(url_for("notes"))
@@ -1043,6 +1069,7 @@ def notes():
         int(note["id"]): db.get_note_review_count(int(note["id"]), today_key())
         for note in notes_list
     }
+    tasks_list = db.list_user_tasks(user_id)
     return render_template(
         "notes.html",
         notes=notes_list,
@@ -1055,6 +1082,7 @@ def notes():
         review_output=review_output,
         sbar_output=sbar_output,
         sbar_generated_at=saved_sbar_updated_at,
+        tasks=tasks_list,
     )
 
 
@@ -1198,6 +1226,43 @@ def download_note_pdf(note_id: int):
         as_attachment=True,
         download_name=f"{filename}.pdf",
     )
+
+
+@app.route("/tasks/add", methods=["POST"])
+@login_required
+def add_task():
+    payload = request.get_json(silent=True) or {}
+    note_id = payload.get("note_id")
+    description = str(payload.get("description", "")).strip()
+    urgency = str(payload.get("urgency", "baixa")).strip().lower()
+    recurrence_hours = int(payload.get("recurrence_hours", 0))
+
+    if not note_id or not description:
+        return {"ok": False, "error": "Nota e descrição são obrigatórias."}, 400
+    if urgency not in {"baixa", "media", "alta"}:
+        urgency = "baixa"
+
+    task = db.create_task(current_user_id(), int(note_id), description, urgency, recurrence_hours)
+    return {"ok": True, "task": task}, 200
+
+
+@app.route("/tasks/<int:task_id>/toggle", methods=["POST"])
+@login_required
+def toggle_task(task_id: int):
+    payload = request.get_json(silent=True) or {}
+    is_completed = bool(payload.get("is_completed", False))
+
+    if not db.toggle_task(current_user_id(), task_id, is_completed):
+        return {"ok": False, "error": "Tarefa não encontrada."}, 404
+    return {"ok": True}, 200
+
+
+@app.route("/tasks/<int:task_id>/delete", methods=["POST"])
+@login_required
+def delete_task(task_id: int):
+    if not db.delete_task(current_user_id(), task_id):
+        return {"ok": False, "error": "Tarefa não encontrada."}, 404
+    return {"ok": True}, 200
 
 
 ensure_database()
