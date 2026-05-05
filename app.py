@@ -40,7 +40,7 @@ load_dotenv(BASE_DIR / ".env")
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me-for-production")
-app.config["DATABASE_URL"] = os.environ.get("DATABASE_URL", db.DATABASE_URL)
+app.config["DATABASE_URL"] = os.environ.get("DATABASE_URL", db.DEFAULT_DATABASE_URL)
 app.config["GEMINI_MODEL"] = os.environ.get("GEMINI_MODEL", "gemini-3-flash-preview")
 app.config["GEMINI_TEMPERATURE"] = float(os.environ.get("GEMINI_TEMPERATURE", "0.0"))
 app.config["GEMINI_TIMEOUT_SECONDS"] = int(os.environ.get("GEMINI_TIMEOUT_SECONDS", "45"))
@@ -1022,13 +1022,14 @@ def notes():
             flash("Analise removida.", "success")
         else:
             title = request.form.get("title", "").strip()
+            diagnosis = request.form.get("diagnosis", "").strip()
             content = request.form.get("content", "").strip()
             if not title:
                 flash("A anotacao precisa de um titulo.", "error")
             elif not content:
                 flash("A anotacao nao pode ficar vazia.", "error")
             else:
-                db.create_note(user_id, title, content)
+                db.create_note(user_id, title, diagnosis, content)
                 session.pop("review_output", None)
                 flash("Anotacao salva.", "success")
                 return redirect(url_for("notes"))
@@ -1061,6 +1062,7 @@ def notes():
 @login_required
 def edit_note(note_id: int):
     title = request.form.get("title", "").strip()
+    diagnosis = request.form.get("diagnosis", "").strip()
     review_output = clean_assistant_text(request.form.get("review_output", ""))
     content = request.form.get("content", "").strip()
     if not title:
@@ -1070,7 +1072,7 @@ def edit_note(note_id: int):
         flash("A anotacao nao pode ficar vazia.", "error")
         return redirect(url_for("notes", edit=note_id))
 
-    if not db.update_note(current_user_id(), note_id, title, content, review_output):
+    if not db.update_note(current_user_id(), note_id, title, diagnosis, content, review_output):
         flash("Anotacao nao encontrada.", "error")
         return redirect(url_for("notes"))
 
@@ -1084,6 +1086,7 @@ def edit_note(note_id: int):
 def autosave_note(note_id: int):
     payload = request.get_json(silent=True) or {}
     title = str(payload.get("title", "")).strip()
+    diagnosis = str(payload.get("diagnosis", "")).strip()
     review_output = clean_assistant_text(str(payload.get("review_output", "")))
     content = str(payload.get("content", "")).strip()
     if not title:
@@ -1091,7 +1094,7 @@ def autosave_note(note_id: int):
     if not content:
         return {"ok": False, "error": "A anotacao nao pode ficar vazia."}, 400
 
-    if not db.update_note(current_user_id(), note_id, title, content, review_output):
+    if not db.update_note(current_user_id(), note_id, title, diagnosis, content, review_output):
         return {"ok": False, "error": "Anotacao nao encontrada."}, 404
 
     session.pop("review_output", None)
