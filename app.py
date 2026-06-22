@@ -201,7 +201,7 @@ def set_selected_note_id(selected_id: int | None) -> None:
 
 def get_active_tab() -> str:
     tab = request.args.get("tab", "").strip().lower()
-    if tab in {"notes", "sbar", "tasks", "quick"}:
+    if tab in {"notes", "sbar", "tasks"}:
         return tab
     return "notes"
 
@@ -909,26 +909,6 @@ def notes():
     saved_sbar_note_ids, saved_sbar_output, saved_sbar_updated_at = get_saved_sbar(user_id)
     sbar_output = saved_sbar_output
     notes_list = db.list_user_notes(user_id)
-    
-    # Filter by status and location
-    filter_location = request.args.get("location")
-    filter_status = request.args.get("status")
-    
-    if filter_status:
-        notes_list = [n for n in notes_list if n.get("status") == filter_status]
-    else:
-        # Default to only showing active patients
-        notes_list = [n for n in notes_list if n.get("status", "ativo") == "ativo"]
-        
-    if filter_location:
-        notes_list = [n for n in notes_list if str(n.get("location_id")) == str(filter_location)]
-        
-    for note in notes_list:
-        note["evolutions"] = db.list_note_evolutions(note["id"])
-    
-    locations = db.list_locations(user_id)
-    quick_note = db.get_quick_note(user_id)
-
     note_map = get_note_map(notes_list)
     selected_note_id = get_selected_note_id(notes_list)
     selected_sbar_note_ids = saved_sbar_note_ids or get_selected_sbar_note_ids(notes_list)
@@ -938,7 +918,7 @@ def notes():
     if request.method == "POST":
         form_name = request.form.get("form_name")
         active_tab = request.form.get("active_tab", active_tab).strip().lower()
-        if active_tab not in {"notes", "sbar", "tasks", "quick"}:
+        if active_tab not in {"notes", "sbar", "tasks"}:
             active_tab = "notes"
 
         if form_name == "review":
@@ -1054,17 +1034,12 @@ def notes():
             if not task_recurrences:
                 task_recurrences = request.form.getlist("new_note_task_recurrence")
 
-            location_id_str = request.form.get("location_id")
-            location_id = int(location_id_str) if location_id_str and location_id_str.isdigit() else None
-            
             if not title:
                 flash("A anotacao precisa de um titulo.", "error")
             elif not content:
                 flash("A anotacao nao pode ficar vazia.", "error")
             else:
-                new_note_id = db.create_note(user_id, title, diagnosis, content, location_id)
-                db.add_evolution(new_note_id, content)
-
+                new_note_id = db.create_note(user_id, title, diagnosis, content)
                 for i in range(len(task_descs)):
                     desc = task_descs[i].strip()
                     if not desc:
@@ -1094,10 +1069,7 @@ def notes():
         int(note["id"]): db.get_note_review_count(int(note["id"]), today_key())
         for note in notes_list
     }
-    raw_tasks = db.list_user_tasks(user_id)
-    # Only show tasks for active patients
-    active_note_ids = {n["id"] for n in db.list_user_notes(user_id) if n.get("status", "ativo") == "ativo"}
-    tasks_list = [t for t in raw_tasks if t["note_id"] in active_note_ids]
+    tasks_list = db.list_user_tasks(user_id)
     return render_template(
         "notes.html",
         notes=notes_list,
@@ -1111,10 +1083,6 @@ def notes():
         sbar_output=sbar_output,
         sbar_generated_at=saved_sbar_updated_at,
         tasks=tasks_list,
-        locations=locations,
-        quick_note=quick_note,
-        filter_status=filter_status,
-        filter_location=filter_location,
     )
 
 
@@ -1124,11 +1092,15 @@ def edit_note(note_id: int):
     title = request.form.get("title", "").strip()
     diagnosis = request.form.get("diagnosis", "").strip()
     review_output = clean_assistant_text(request.form.get("review_output", ""))
+    content = request.form.get("content", "").strip()
     if not title:
-        flash("O paciente precisa de um nome/titulo.", "error")
+        flash("A anotacao precisa de um titulo.", "error")
         return redirect(url_for("notes"))
+    if not content:
+        flash("A anotacao nao pode ficar vazia.", "error")
+        return redirect(url_for("notes", edit=note_id))
 
-    if not db.update_note(current_user_id(), note_id, title, diagnosis, review_output):
+    if not db.update_note(current_user_id(), note_id, title, diagnosis, content, review_output):
         flash("Anotacao nao encontrada.", "error")
         return redirect(url_for("notes"))
 
@@ -1144,10 +1116,13 @@ def autosave_note(note_id: int):
     title = str(payload.get("title", "")).strip()
     diagnosis = str(payload.get("diagnosis", "")).strip()
     review_output = clean_assistant_text(str(payload.get("review_output", "")))
+    content = str(payload.get("content", "")).strip()
     if not title:
         return {"ok": False, "error": "A anotacao precisa de um titulo."}, 400
+    if not content:
+        return {"ok": False, "error": "A anotacao nao pode ficar vazia."}, 400
 
-    if not db.update_note(current_user_id(), note_id, title, diagnosis, review_output):
+    if not db.update_note(current_user_id(), note_id, title, diagnosis, content, review_output):
         return {"ok": False, "error": "Anotacao nao encontrada."}, 404
 
     session.pop("review_output", None)
@@ -1290,62 +1265,9 @@ def delete_task(task_id: int):
     return {"ok": True}, 200
 
 
-@app.post("/locations")
-@login_required
-def create_location():
-    name = request.form.get("name", "").strip()
-    if name:
-        db.create_location(current_user_id(), name)
-        flash("Pasta criada.", "success")
-    return redirect(url_for("notes"))
-
-@app.post("/locations/<int:location_id>/delete")
-@login_required
-def delete_location(location_id: int):
-    db.delete_location(current_user_id(), location_id)
-    flash("Pasta removida.", "success")
-    return redirect(url_for("notes"))
-
-@app.post("/notes/<int:note_id>/metadata")
-@login_required
-def update_note_metadata(note_id: int):
-    payload = request.get_json(silent=True) or {}
-    location_id = payload.get("location_id")
-    status = payload.get("status")
-    is_favorite = payload.get("is_favorite")
-    
-    if location_id is not None:
-        location_id = int(location_id)
-    if is_favorite is not None:
-        is_favorite = bool(is_favorite)
-        
-    success = db.update_note_metadata(current_user_id(), note_id, location_id, status, is_favorite)
-    return jsonify({"ok": success})
-
-@app.post("/notes/<int:note_id>/evolution")
-@login_required
-def add_evolution(note_id: int):
-    payload = request.get_json(silent=True) or {}
-    content = payload.get("content", "").strip()
-    if content:
-        evo_id = db.add_evolution(note_id, content)
-        return jsonify({"ok": True, "evolution_id": evo_id})
-    return jsonify({"ok": False}), 400
-
-@app.post("/quick_note")
-@login_required
-def save_quick_note():
-    payload = request.get_json(silent=True) or {}
-    content = payload.get("content", "")
-    db.save_quick_note(current_user_id(), content)
-    return jsonify({"ok": True})
-
-
 ensure_database()
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=True)
-
-

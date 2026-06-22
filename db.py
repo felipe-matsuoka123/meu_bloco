@@ -110,7 +110,7 @@ def register_failed_login(user_id: int, failed_attempts: int, locked_until: date
 def list_user_notes(user_id: int) -> list[dict[str, Any]]:
     return fetch_all(
         """
-        SELECT id, title, diagnosis, review_output, content, created_at, location_id, status, is_favorite
+        SELECT id, title, diagnosis, review_output, content, created_at
         FROM notes
         WHERE user_id = %s
         ORDER BY created_at DESC, id DESC
@@ -122,7 +122,7 @@ def list_user_notes(user_id: int) -> list[dict[str, Any]]:
 def get_user_note(user_id: int, note_id: int) -> dict[str, Any] | None:
     return fetch_one(
         """
-        SELECT id, title, diagnosis, review_output, content, created_at, location_id, status, is_favorite
+        SELECT id, title, diagnosis, review_output, content, created_at
         FROM notes
         WHERE user_id = %s AND id = %s
         """,
@@ -130,26 +130,27 @@ def get_user_note(user_id: int, note_id: int) -> dict[str, Any] | None:
     )
 
 
-def create_note(user_id: int, title: str, diagnosis: str, content: str, location_id: int | None = None) -> int:
+def create_note(user_id: int, title: str, diagnosis: str, content: str) -> int:
     cursor = execute(
-        "INSERT INTO notes (user_id, title, diagnosis, review_output, content, location_id) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-        (user_id, title, diagnosis, "", content, location_id),
+        "INSERT INTO notes (user_id, title, diagnosis, review_output, content) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        (user_id, title, diagnosis, "", content),
     )
     new_id = cursor.fetchone()["id"]
     get_db().commit()
     return int(new_id)
 
 
-def update_note(user_id: int, note_id: int, title: str, diagnosis: str, review_output: str) -> bool:
+def update_note(user_id: int, note_id: int, title: str, diagnosis: str, content: str, review_output: str) -> bool:
     cursor = execute(
         """
         UPDATE notes
         SET title = %s,
             diagnosis = %s,
-            review_output = %s
+            review_output = %s,
+            content = %s
         WHERE id = %s AND user_id = %s
         """,
-        (title, diagnosis, review_output, note_id, user_id),
+        (title, diagnosis, review_output, content, note_id, user_id),
     )
     get_db().commit()
     return cursor.rowcount > 0
@@ -157,15 +158,8 @@ def update_note(user_id: int, note_id: int, title: str, diagnosis: str, review_o
 
 def delete_note(user_id: int, note_id: int) -> None:
     execute(
-        "UPDATE notes SET status = 'deletado', updated_at = CURRENT_TIMESTAMP WHERE id = %s AND user_id = %s",
+        "DELETE FROM notes WHERE id = %s AND user_id = %s",
         (note_id, user_id),
-    )
-    get_db().commit()
-
-def hard_delete_old_notes(user_id: int) -> None:
-    execute(
-        "DELETE FROM notes WHERE user_id = %s AND status = 'deletado' AND updated_at < CURRENT_TIMESTAMP - INTERVAL '7 days'",
-        (user_id,)
     )
     get_db().commit()
 
@@ -316,86 +310,3 @@ def delete_task(user_id: int, task_id: int) -> bool:
     )
     get_db().commit()
     return cursor.rowcount > 0
-
-
-# --- Evolutions ---
-def list_note_evolutions(note_id: int) -> list[dict[str, Any]]:
-    return fetch_all(
-        "SELECT id, note_id, content, created_at FROM evolutions WHERE note_id = %s ORDER BY created_at DESC",
-        (note_id,)
-    )
-
-def add_evolution(note_id: int, content: str) -> int:
-    cursor = execute(
-        "INSERT INTO evolutions (note_id, content) VALUES (%s, %s) RETURNING id",
-        (note_id, content)
-    )
-    get_db().commit()
-    return int(cursor.fetchone()["id"])
-
-
-# --- Locations ---
-def list_locations(user_id: int) -> list[dict[str, Any]]:
-    return fetch_all(
-        "SELECT id, name, created_at FROM locations WHERE user_id = %s ORDER BY name ASC",
-        (user_id,)
-    )
-
-def create_location(user_id: int, name: str) -> int:
-    cursor = execute(
-        "INSERT INTO locations (user_id, name) VALUES (%s, %s) RETURNING id",
-        (user_id, name)
-    )
-    get_db().commit()
-    return int(cursor.fetchone()["id"])
-
-def delete_location(user_id: int, location_id: int) -> None:
-    execute("DELETE FROM locations WHERE id = %s AND user_id = %s", (location_id, user_id))
-    get_db().commit()
-
-
-# --- Note Metadata (Patient Status) ---
-def update_note_metadata(user_id: int, note_id: int, location_id: int | None = None, status: str | None = None, is_favorite: bool | None = None) -> bool:
-    updates = []
-    params = []
-    if location_id is not None:
-        if location_id == 0:  # 0 means remove location
-            updates.append("location_id = NULL")
-        else:
-            updates.append("location_id = %s")
-            params.append(location_id)
-    if status is not None:
-        updates.append("status = %s")
-        params.append(status)
-    if is_favorite is not None:
-        updates.append("is_favorite = %s")
-        params.append(is_favorite)
-        
-    if not updates:
-        return False
-        
-    query = f"UPDATE notes SET {', '.join(updates)} WHERE id = %s AND user_id = %s"
-    params.extend([note_id, user_id])
-    
-    cursor = execute(query, tuple(params))
-    get_db().commit()
-    return cursor.rowcount > 0
-
-
-# --- Quick Notes (Rascunho) ---
-def get_quick_note(user_id: int) -> str:
-    row = fetch_one("SELECT content FROM quick_notes WHERE user_id = %s", (user_id,))
-    return row["content"] if row else ""
-
-def save_quick_note(user_id: int, content: str) -> None:
-    execute(
-        """
-        INSERT INTO quick_notes (user_id, content, updated_at) 
-        VALUES (%s, %s, CURRENT_TIMESTAMP)
-        ON CONFLICT (user_id) 
-        DO UPDATE SET content = EXCLUDED.content, updated_at = CURRENT_TIMESTAMP
-        """,
-        (user_id, content)
-    )
-    get_db().commit()
-
