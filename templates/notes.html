@@ -445,10 +445,6 @@
                         <h3 class="font-headline font-bold text-primary">Nova evolução clínica</h3>
                     </div>
 
-                    <div class="mb-6 rounded-xl border border-secondary/20 bg-secondary-fixed/30 p-4 text-sm font-medium leading-relaxed text-on-surface-variant">
-                        <strong class="text-secondary">Disclaimer:</strong> Este sistema não substitui o prontuário oficial. Para proteger a privacidade dos pacientes e cumprir a Lei Geral de Proteção de Dados Pessoais (LGPD), não registre informações que permitam a identificação do paciente (como nome, documentos, endereço ou número de prontuário). Utilize apenas dados clínicos não identificáveis.
-                    </div>
-
                     <form method="post" class="space-y-6">
                         <input type="hidden" name="form_name" value="note">
                         <input type="hidden" name="active_tab" value="notes">
@@ -456,11 +452,6 @@
                         <div class="group relative">
                             <input class="w-full border-b-2 border-outline-variant bg-transparent py-3 text-lg font-medium outline-none transition-all placeholder:text-outline-variant/60 focus:border-secondary" name="title" placeholder="Nome do paciente ou título do caso" required type="text">
                             <label class="absolute -top-3 left-0 text-[10px] font-bold uppercase tracking-widest text-secondary opacity-0 transition-opacity group-focus-within:opacity-100">Título / paciente</label>
-                        </div>
-
-                        <div class="group relative">
-                            <input class="w-full border-b-2 border-outline-variant bg-transparent py-3 text-base font-medium outline-none transition-all placeholder:text-outline-variant/60 focus:border-secondary" name="diagnosis" placeholder="Hipótese diagnóstica / diagnóstico" type="text">
-                            <label class="absolute -top-3 left-0 text-[10px] font-bold uppercase tracking-widest text-secondary opacity-0 transition-opacity group-focus-within:opacity-100">Hipótese diagnóstica</label>
                         </div>
 
                         <div class="relative">
@@ -517,10 +508,9 @@
                                             <div class="flex h-12 w-12 items-center justify-center rounded-full bg-primary-fixed font-headline font-bold text-primary">
                                                 {{ title_text[:2].upper() }}
                                             </div>
-                                            <div class="min-w-0 flex-1">
+                                            <div class="min-w-0">
                                                 <input class="w-full border-0 bg-transparent p-0 font-headline text-lg font-bold text-primary outline-none ring-0 placeholder:text-outline-variant" data-autosave-note-title name="title" placeholder="Título da anotação" required type="text" value="{{ title_text }}">
-                                                <input class="mt-1 w-full border-0 bg-transparent p-0 text-sm font-semibold text-secondary outline-none ring-0 placeholder:text-secondary/50" data-autosave-note-diagnosis name="diagnosis" placeholder="Hipótese diagnóstica" type="text" value="{{ note['diagnosis'] or '' }}">
-                                                <p class="mt-1 text-xs font-medium text-outline">
+                                                <p class="text-xs font-medium text-outline">
                                                     Última edição:
                                                     {% if note["created_at"] %}
                                                         {{ note["created_at"].strftime("%d/%m/%Y %H:%M") }}
@@ -679,7 +669,6 @@
                                 },
                                 body: JSON.stringify({
                                     title: titleInput.value,
-                                    diagnosis: form.querySelector("[data-autosave-note-diagnosis]")?.value || "",
                                     review_output: reviewOutput.value,
                                     content: noteInput.value,
                                 }),
@@ -711,7 +700,6 @@
 
             document.querySelectorAll("[data-autosave-note-form]").forEach(function (form) {
                 const titleInput = form.querySelector("[data-autosave-note-title]");
-                const diagnosisInput = form.querySelector("[data-autosave-note-diagnosis]");
                 const input = form.querySelector("[data-autosave-note-input]");
                 const reviewBox = form.querySelector("[data-note-review-box]");
                 const reviewOutput = form.querySelector("[data-note-review-output]");
@@ -752,7 +740,6 @@
 
                 let lastSavedSnapshot = JSON.stringify({
                     title: titleInput.value,
-                    diagnosis: diagnosisInput ? diagnosisInput.value : "",
                     content: input.value,
                     review_output: reviewOutput ? reviewOutput.value : "",
                 });
@@ -761,7 +748,6 @@
                 const autosave = debounce(function () {
                     const nextSnapshot = JSON.stringify({
                         title: titleInput.value,
-                        diagnosis: diagnosisInput ? diagnosisInput.value : "",
                         content: input.value,
                         review_output: reviewOutput ? reviewOutput.value : "",
                     });
@@ -778,7 +764,6 @@
                         },
                         body: JSON.stringify({
                             title: titleInput.value,
-                            diagnosis: diagnosisInput ? diagnosisInput.value : "",
                             review_output: reviewOutput ? reviewOutput.value : "",
                             content: input.value,
                         }),
@@ -811,7 +796,6 @@
                 }
 
                 titleInput.addEventListener("input", queueAutosave);
-                if (diagnosisInput) diagnosisInput.addEventListener("input", queueAutosave);
                 input.addEventListener("input", queueAutosave);
 
                 toggle.addEventListener("click", function () {

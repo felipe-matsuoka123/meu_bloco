@@ -22,9 +22,6 @@ ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT 'Sem título';
 ALTER TABLE notes
 ADD COLUMN IF NOT EXISTS review_output TEXT NOT NULL DEFAULT '';
 
-ALTER TABLE notes
-ADD COLUMN IF NOT EXISTS diagnosis TEXT NOT NULL DEFAULT '';
-
 UPDATE notes
 SET title = 'Sem título'
 WHERE title IS NULL OR BTRIM(title) = '';
