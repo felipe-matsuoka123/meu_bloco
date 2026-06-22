@@ -130,14 +130,12 @@ def get_user_note(user_id: int, note_id: int) -> dict[str, Any] | None:
     )
 
 
-def create_note(user_id: int, title: str, diagnosis: str, content: str) -> int:
-    cursor = execute(
-        "INSERT INTO notes (user_id, title, diagnosis, review_output, content) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+def create_note(user_id: int, title: str, diagnosis: str, content: str) -> None:
+    execute(
+        "INSERT INTO notes (user_id, title, diagnosis, review_output, content) VALUES (%s, %s, %s, %s, %s)",
         (user_id, title, diagnosis, "", content),
     )
-    new_id = cursor.fetchone()["id"]
     get_db().commit()
-    return int(new_id)
 
 
 def update_note(user_id: int, note_id: int, title: str, diagnosis: str, content: str, review_output: str) -> bool:
@@ -222,91 +220,3 @@ def delete_user_sbar(user_id: int) -> None:
         (user_id,),
     )
     get_db().commit()
-
-
-def update_recurring_tasks(user_id: int) -> None:
-    execute(
-        """
-        UPDATE tasks
-        SET is_completed = FALSE, completed_at = NULL
-        WHERE user_id = %s
-          AND recurrence_hours > 0
-          AND is_completed = TRUE
-          AND completed_at + (recurrence_hours || ' hours')::interval <= CURRENT_TIMESTAMP
-        """,
-        (user_id,)
-    )
-    get_db().commit()
-
-
-def list_user_tasks(user_id: int) -> list[dict[str, Any]]:
-    update_recurring_tasks(user_id)
-    return fetch_all(
-        """
-        SELECT id, note_id, description, urgency, recurrence_hours, is_completed, completed_at, created_at
-        FROM tasks
-        WHERE user_id = %s
-          AND (
-              is_completed = FALSE
-              OR recurrence_hours > 0
-              OR completed_at > CURRENT_TIMESTAMP - interval '16 hours'
-          )
-        ORDER BY
-            is_completed ASC,
-            CASE urgency
-                WHEN 'alta' THEN 1
-                WHEN 'media' THEN 2
-                WHEN 'baixa' THEN 3
-                ELSE 4
-            END,
-            created_at DESC
-        """,
-        (user_id,)
-    )
-
-
-def create_task(user_id: int, note_id: int, description: str, urgency: str, recurrence_hours: int) -> dict[str, Any]:
-    cursor = execute(
-        """
-        INSERT INTO tasks (note_id, user_id, description, urgency, recurrence_hours)
-        VALUES (%s, %s, %s, %s, %s)
-        RETURNING id, note_id, description, urgency, recurrence_hours, is_completed, completed_at, created_at
-        """,
-        (note_id, user_id, description, urgency, recurrence_hours)
-    )
-    row = cursor.fetchone()
-    get_db().commit()
-    columns = [desc[0] for desc in cursor.description]
-    return dict(zip(columns, row))
-
-
-def toggle_task(user_id: int, task_id: int, is_completed: bool) -> bool:
-    if is_completed:
-        cursor = execute(
-            """
-            UPDATE tasks
-            SET is_completed = TRUE, completed_at = CURRENT_TIMESTAMP
-            WHERE id = %s AND user_id = %s
-            """,
-            (task_id, user_id)
-        )
-    else:
-        cursor = execute(
-            """
-            UPDATE tasks
-            SET is_completed = FALSE, completed_at = NULL
-            WHERE id = %s AND user_id = %s
-            """,
-            (task_id, user_id)
-        )
-    get_db().commit()
-    return cursor.rowcount > 0
-
-
-def delete_task(user_id: int, task_id: int) -> bool:
-    cursor = execute(
-        "DELETE FROM tasks WHERE id = %s AND user_id = %s",
-        (task_id, user_id)
-    )
-    get_db().commit()
-    return cursor.rowcount > 0

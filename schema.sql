@@ -49,18 +49,3 @@ CREATE TABLE IF NOT EXISTS user_saved_sbar (
     rows JSONB NOT NULL DEFAULT '[]'::jsonb,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
-CREATE TABLE IF NOT EXISTS tasks (
-    id BIGSERIAL PRIMARY KEY,
-    note_id BIGINT NOT NULL REFERENCES notes (id) ON DELETE CASCADE,
-    user_id BIGINT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    description TEXT NOT NULL,
-    urgency TEXT NOT NULL DEFAULT 'baixa',
-    recurrence_hours INTEGER NOT NULL DEFAULT 0,
-    is_completed BOOLEAN NOT NULL DEFAULT FALSE,
-    completed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks (user_id);
-CREATE INDEX IF NOT EXISTS idx_tasks_note_id ON tasks (note_id);
