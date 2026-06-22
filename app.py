@@ -159,14 +159,20 @@ def get_note_map(notes_list: list[dict]) -> dict[int, dict]:
     return {int(note["id"]): note for note in notes_list}
 
 
+def strip_sbar_title_label(text: str) -> str:
+    return re.sub(r"^(?:t[ií]tulo|paciente|id)\s*:\s*", "", text.strip(), flags=re.IGNORECASE).strip()
+
+
 def prepend_note_title_to_sbar_patient(note_title: str, patient_text: str) -> str:
     normalized_title = clean_assistant_text(note_title) or "Sem título"
     normalized_patient = clean_assistant_text(patient_text)
-    if normalized_patient == normalized_title or normalized_patient.startswith(f"{normalized_title}\n"):
-        return normalized_patient
-    if not normalized_patient:
+    remaining_lines = normalized_patient.splitlines()
+    while remaining_lines and strip_sbar_title_label(remaining_lines[0]).casefold() == normalized_title.casefold():
+        remaining_lines.pop(0)
+    remaining_patient = "\n".join(remaining_lines).strip()
+    if not remaining_patient:
         return normalized_title
-    return f"{normalized_title}\n{normalized_patient}"
+    return f"{normalized_title}\n{remaining_patient}"
 
 
 def add_note_titles_to_sbar_rows(rows: list[dict[str, str | int]] | None, note_map: dict[int, dict]) -> list[dict[str, str | int]] | None:
